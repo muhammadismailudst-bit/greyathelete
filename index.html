@@ -57,7 +57,7 @@
     </div>
   </div>
 
-  <div class="fab-bar"><button class="fab" id="addBtn" type="button">+ Add person</button></div>
+  <div class="fab-bar"><div class="fab-row"><button class="fab" id="addBtn" type="button">+ Add person</button><button class="fab ghost" id="bulkBtn" type="button">Bulk add</button></div></div>
 </div>
 
 <!-- Add / edit sheet -->
@@ -81,6 +81,37 @@
       <button type="button" class="btn-sm danger" id="deleteBtn" hidden>Delete person</button>
     </div>
   </form>
+</div>
+
+<!-- Bulk add sheet -->
+<div class="sheet" id="bulk" hidden role="dialog" aria-modal="true" aria-labelledby="bulkTitle">
+  <div class="panel">
+    <div class="panel-head">
+      <button type="button" class="link" id="bulkClose">Cancel</button>
+      <h2 id="bulkTitle">Bulk add</h2>
+      <button type="button" class="link strong" id="bulkSave" disabled>Add</button>
+    </div>
+    <div class="panel-body">
+      <div class="help">
+        <p>One person per line. Separate columns with commas, or paste rows straight from Excel or Google Sheets.</p>
+        <p class="fmt">Name, Gym, Level, Size, Races, Items, Note</p>
+        <ul>
+          <li>Only <b>Name</b> is required. Leave a column empty with <code>,,</code></li>
+          <li>Several races or items: separate with <code>;</code></li>
+          <li>Level: Beginner, Intermediate or Advanced. Size: XS to XXXL.</li>
+          <li>New race or item names are added to your lists.</li>
+          <li>A header row and people already in the list are skipped.</li>
+        </ul>
+        <pre class="example" id="bulkExample">Ali Khan, Iron Gym, Beginner, M, Hyrox Dubai; T-100, Bag; T-shirt, paid
+Sara Ahmed, Fit Hub, Advanced, S, T-100, Head band; Bag; Medal,
+Omar Y, Iron Gym, , L, , T-shirt, size to confirm</pre>
+        <button type="button" class="btn-sm" id="bulkUseExample">Paste the example</button>
+      </div>
+      <label class="field"><span class="lbl">Your list</span><textarea id="bulkText" class="bulk-text" placeholder="Paste or type here" spellcheck="false"></textarea></label>
+      <div id="bulkPreview"></div>
+      <p class="msg" id="bulkMsg" role="status"></p>
+    </div>
+  </div>
 </div>
 
 <!-- Races & items sheet -->

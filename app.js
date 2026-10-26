@@ -78,7 +78,7 @@
     saveToken(null);
     clearInterval(timer); timer = null;
     people = []; races = []; items = []; openId = null;
-    closeSheet(); closeManage();
+    closeSheet(); closeManage(); $("bulk").hidden = true;
     $("list").replaceChildren();
     $("pin").value = ""; $("loginMsg").textContent = "";
     show("login");
@@ -197,7 +197,7 @@
   $("sheet").addEventListener("click", (e) => { if (e.target === $("sheet")) closeSheet(); });
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
-    if (!$("sheet").hidden) closeSheet(); else if (!$("manage").hidden) closeManage();
+    if (!$("sheet").hidden) closeSheet(); else if (!$("bulk").hidden) closeBulk(); else if (!$("manage").hidden) closeManage();
   });
 
   $("form").addEventListener("submit", async (e) => {
@@ -329,6 +329,132 @@
       il.append(li);
     }
   }
+
+  // ---------- Bulk add ----------
+  const BULK_MAX = 500;
+  let bulkRows = [];
+
+  // One line -> cells. Tabs (pasted from a spreadsheet) win; otherwise commas, with "quoted, values".
+  function splitLine(line) {
+    if (line.includes("\t")) return line.split("\t").map((c) => { const m = /^\s*"([\s\S]*)"\s*$/.exec(c); return m ? m[1].replace(/""/g, '"') : c; });
+    const out = []; let cur = "", q = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (q) { if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; } else if (c === '"') q = false; else cur += c; }
+      else if (c === '"' && !cur.trim()) { q = true; cur = ""; }
+      else if (c === ",") { out.push(cur); cur = ""; }
+      else cur += c;
+    }
+    out.push(cur);
+    return out;
+  }
+  const multi = (s) => {
+    const seen = new Set(), out = [];
+    for (const v of String(s || "").split(/[;|]/).map((x) => x.trim()).filter(Boolean)) {
+      const k = v.toLowerCase(); if (!seen.has(k)) { seen.add(k); out.push(v); }
+    }
+    return out;
+  };
+  function normLevel(s) {
+    const v = String(s || "").trim().toLowerCase();
+    if (!v) return [""];
+    if (v.startsWith("beg")) return ["Beginner"];
+    if (v.startsWith("int")) return ["Intermediate"];
+    if (v.startsWith("adv")) return ["Advanced"];
+    return ["", `level "${s.trim()}" not recognised`];
+  }
+  function normSize(s) {
+    let v = String(s || "").trim().toUpperCase().replace(/\s+/g, "");
+    if (!v) return [""];
+    v = { "2XL": "XXL", "3XL": "XXXL", SMALL: "S", MEDIUM: "M", LARGE: "L" }[v] || v;
+    return SIZES.includes(v) ? [v] : ["", `size "${s.trim()}" not recognised`];
+  }
+
+  function parseBulk(text) {
+    const existing = new Set(people.map((p) => (p.name + "|" + p.gym).toLowerCase()));
+    const inPaste = new Set();
+    const rows = [];
+    const lines = text.split(/\r?\n/).filter((l) => l.trim());
+    lines.forEach((line, i) => {
+      const c = splitLine(line).map((x) => x.trim());
+      if (i === 0 && c[0] && c[0].toLowerCase() === "name") return;      // header row
+      const name = c[0].slice(0, 80), gym = (c[1] || "").slice(0, 80);
+      const [level, lw] = normLevel(c[2]); const [size, sw] = normSize(c[3]);
+      const row = { name, gym, level, size, races: multi(c[4]), items: multi(c[5]),
+        note: c.slice(6).filter(Boolean).join(", ").slice(0, 1000), warn: [lw, sw].filter(Boolean), skip: "" };
+      const key = (name + "|" + gym).toLowerCase();
+      if (!name) row.skip = "no name";
+      else if (existing.has(key)) row.skip = "already in the list";
+      else if (inPaste.has(key)) row.skip = "repeated in this list";
+      inPaste.add(key);
+      rows.push(row);
+    });
+    return rows;
+  }
+
+  function renderBulkPreview() {
+    bulkRows = parseBulk($("bulkText").value);
+    const box = $("bulkPreview"); box.replaceChildren();
+    const add = bulkRows.filter((r) => !r.skip);
+    $("bulkSave").disabled = !add.length || add.length > BULK_MAX;
+    $("bulkSave").textContent = add.length ? `Add ${add.length}` : "Add";
+    $("bulkMsg").textContent = add.length > BULK_MAX ? `That's ${add.length} people. Add at most ${BULK_MAX} at a time.` : "";
+    if (!bulkRows.length) return;
+
+    const knownR = new Set(races.map((r) => r.name.toLowerCase())), knownI = new Set(items.map((i) => i.name.toLowerCase()));
+    const newR = new Map(), newI = new Map();
+    for (const r of add) {
+      for (const x of r.races) if (!knownR.has(x.toLowerCase())) newR.set(x.toLowerCase(), x);
+      for (const x of r.items) if (!knownI.has(x.toLowerCase())) newI.set(x.toLowerCase(), x);
+    }
+    const wrap = el("div", "preview");
+    const head = el("div", "preview-head");
+    const skipped = bulkRows.length - add.length;
+    head.append(el("b", null, `${add.length} to add` + (skipped ? ` · ${skipped} skipped` : "")));
+    if (newR.size) head.append(el("span", null, "New races: " + [...newR.values()].join(", ")));
+    if (newI.size) head.append(el("span", null, "New items: " + [...newI.values()].join(", ")));
+    wrap.append(head);
+    const ul = el("ul");
+    for (const r of bulkRows.slice(0, 200)) {
+      const li = el("li", r.skip ? "skip" : "");
+      li.append(el("span", "p-name", (r.name || "(no name)") + (r.skip ? ` — skipped: ${r.skip}` : "")));
+      const sub = [r.gym, r.level, r.size && "Size " + r.size].filter(Boolean).join(" · ");
+      if (sub) li.append(el("span", "p-sub", sub));
+      if (r.races.length) li.append(el("span", "p-sub", "Races: " + r.races.join(", ")));
+      if (r.items.length) li.append(el("span", "p-sub", "Items: " + r.items.join(", ")));
+      if (r.note) li.append(el("span", "p-sub", "Note: " + r.note));
+      for (const w of r.warn) li.append(el("span", "p-sub warn", w + " (left blank)"));
+      ul.append(li);
+    }
+    if (bulkRows.length > 200) ul.append(el("li", "p-sub", `…and ${bulkRows.length - 200} more`));
+    wrap.append(ul); box.append(wrap);
+  }
+
+  let bulkTimer;
+  $("bulkText").addEventListener("input", () => { clearTimeout(bulkTimer); bulkTimer = setTimeout(renderBulkPreview, 250); });
+  $("bulkUseExample").addEventListener("click", () => { $("bulkText").value = $("bulkExample").textContent; renderBulkPreview(); });
+  $("bulkBtn").addEventListener("click", () => {
+    $("bulkMsg").textContent = ""; renderBulkPreview();
+    $("toast").hidden = true; $("bulk").hidden = false; document.body.classList.add("locked");
+  });
+  function closeBulk() { $("bulk").hidden = true; if ($("sheet").hidden && $("manage").hidden) document.body.classList.remove("locked"); }
+  $("bulkClose").addEventListener("click", closeBulk);
+  $("bulk").addEventListener("click", (e) => { if (e.target === $("bulk")) closeBulk(); });
+  $("bulkSave").addEventListener("click", async () => {
+    renderBulkPreview();
+    const add = bulkRows.filter((r) => !r.skip);
+    if (!add.length || add.length > BULK_MAX) return;
+    const b = $("bulkSave"); b.disabled = true; $("bulkMsg").textContent = "";
+    try {
+      const res = await call("bulk_add_people", { p_people: add.map(({ warn, skip, ...r }) => r) });
+      const n = (res && res.added) || 0, s = (res && res.skipped) || 0;
+      toast(`Added ${n} ${n === 1 ? "person" : "people"}` + (s ? `, skipped ${s}` : ""));
+      $("bulkText").value = ""; bulkRows = [];
+      closeBulk(); load();
+    } catch (err) {
+      if (err.code !== "locked") $("bulkMsg").textContent = err.code === "offline" ? errorText(err) : "Couldn't add the list. Nothing was saved. Try again.";
+    } finally { b.disabled = false; }
+  });
 
   // ---------- List ----------
   function fillSelect(sel, opts, allLabel) {

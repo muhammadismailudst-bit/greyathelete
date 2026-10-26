@@ -36,3 +36,12 @@ The site will be at `https://muhammadismailudst-bit.github.io/greyathelete/` wit
 - The page sets a strict Content Security Policy. It only talks to `*.supabase.co`.
 
 Limits to know: everyone shares one PIN, so the app can't tell who changed what. Anyone who knows the PIN can see and change all records.
+
+## Bulk add format
+Tap **Bulk add** and paste one person per line (commas, or rows copied from Excel / Google Sheets):
+
+```
+Name, Gym, Level, Size, Races, Items, Note
+Ali Khan, Iron Gym, Beginner, M, Hyrox Dubai; T-100, Bag; T-shirt, paid
+```
+Only Name is required. Separate several races or items with `;`. New race or item names are created. A header row and people already in the list (same name and gym) are skipped. Up to 500 at a time.
