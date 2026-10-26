@@ -9,7 +9,7 @@
 <title>Grey Athlete Kit Log</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=dev">
 </head>
 <body>
 
@@ -106,11 +106,12 @@
         <ul>
           <li>Only <b>Name</b> is required. Leave a column empty with <code>,,</code></li>
           <li>Several races or items: separate with <code>;</code></li>
+          <li>Quantity: <code>T-shirt x2</code></li>
           <li>Level: Beginner, Intermediate or Advanced. Size: XS to XXXL.</li>
           <li>New race or item names are added to your lists.</li>
           <li>A header row and people already in the list are skipped.</li>
         </ul>
-        <pre class="example" id="bulkExample">Ali Khan, Iron Gym, Beginner, M, Hyrox Dubai; T-100, Bag; T-shirt, paid
+        <pre class="example" id="bulkExample">Ali Khan, Iron Gym, Beginner, M, Hyrox Dubai; T-100, Bag; T-shirt x2, paid
 Sara Ahmed, Fit Hub, Advanced, S, T-100, Head band; Bag; Medal,
 Omar Y, Iron Gym, , L, , T-shirt, size to confirm</pre>
         <button type="button" class="btn-sm" id="bulkUseExample">Paste the example</button>
@@ -156,7 +157,7 @@ Omar Y, Iron Gym, , L, , T-shirt, size to confirm</pre>
 <datalist id="gymList"></datalist>
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="config.js"></script>
-<script src="app.js"></script>
+<script src="config.js?v=dev"></script>
+<script src="app.js?v=dev"></script>
 </body>
 </html>
