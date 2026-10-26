@@ -68,7 +68,7 @@ begin
 end $$;
 
 create or replace function public._clean_items(p jsonb)
-returns jsonb language sql immutable as $$
+returns jsonb language sql immutable set search_path = pg_catalog as $$
   select jsonb_build_object(
     'headband', coalesce(p -> 'headband' = 'true'::jsonb, false),
     'flag',     coalesce(p -> 'flag'     = 'true'::jsonb, false),
