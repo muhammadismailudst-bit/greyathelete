@@ -229,3 +229,89 @@ revoke execute on function
   public.set_item(uuid, uuid, text, boolean), public.delete_handout(uuid, uuid),
   public.list_batch_notes(uuid), public.save_batch_note(uuid, text, text)
 from public, anon, authenticated;
+
+-- ---------- Bulk add ----------
+-- Find a race or item by name (any case), creating it if missing.
+create or replace function public._ensure_race(p_name text)
+returns uuid language plpgsql security definer set search_path = public, extensions as $$
+declare v_name text := left(trim(coalesce(p_name, '')), 60); v_id uuid;
+begin
+  if v_name = '' then return null; end if;
+  select id into v_id from races where lower(name) = lower(v_name);
+  if v_id is null then
+    insert into races (name) values (v_name)
+      on conflict ((lower(name))) do nothing returning id into v_id;
+    if v_id is null then select id into v_id from races where lower(name) = lower(v_name); end if;
+  end if;
+  return v_id;
+end $$;
+
+create or replace function public._ensure_item(p_name text)
+returns text language plpgsql security definer set search_path = public, extensions as $$
+declare v_name text := left(trim(coalesce(p_name, '')), 40); v_id text;
+begin
+  if v_name = '' then return null; end if;
+  select id into v_id from items where lower(name) = lower(v_name);
+  if v_id is null then
+    v_id := trim(both '-' from left(regexp_replace(lower(v_name), '[^a-z0-9]+', '-', 'g'), 24));
+    if v_id = '' or exists (select 1 from items where id = v_id) then
+      v_id := 'i-' || substr(md5(gen_random_uuid()::text), 1, 10);
+    end if;
+    insert into items (id, name, sort) values (v_id, v_name, coalesce((select max(sort) from items), 0) + 1);
+  end if;
+  return v_id;
+end $$;
+
+-- p_people: [{name, gym, level, size, races: [names], items: [names], note}], up to 500.
+-- Skips a row whose name + gym already exists (so pasting twice doesn't duplicate).
+-- Returns {"added": n, "skipped": n}. All or nothing.
+create or replace function public.bulk_add_people(p_token uuid, p_people jsonb)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare
+  p jsonb; v_name text; v_gym text; v_level text; v_size text;
+  v_items jsonb; v_races uuid[]; x text; v_id text; v_rid uuid;
+  n_added int := 0; n_skipped int := 0;
+begin
+  perform _require_session(p_token);
+  if jsonb_typeof(p_people) <> 'array' then raise exception 'bad_input'; end if;
+  if jsonb_array_length(p_people) > 500 then raise exception 'too_many_rows'; end if;
+
+  for p in select * from jsonb_array_elements(p_people) loop
+    v_name := left(trim(coalesce(p ->> 'name', '')), 80);
+    if v_name = '' then n_skipped := n_skipped + 1; continue; end if;
+    v_gym := left(trim(coalesce(p ->> 'gym', '')), 80);
+    if exists (select 1 from handouts where lower(name) = lower(v_name) and lower(gym) = lower(v_gym)) then
+      n_skipped := n_skipped + 1; continue;
+    end if;
+    v_level := coalesce(p ->> 'level', '');
+    if v_level not in ('Beginner', 'Intermediate', 'Advanced') then v_level := ''; end if;
+    v_size := upper(coalesce(p ->> 'size', ''));
+    if v_size not in ('XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL') then v_size := ''; end if;
+
+    v_items := '{}'::jsonb;
+    if jsonb_typeof(p -> 'items') = 'array' then
+      for x in select jsonb_array_elements_text(p -> 'items') limit 50 loop
+        v_id := _ensure_item(x);
+        if v_id is not null then v_items := v_items || jsonb_build_object(v_id, true); end if;
+      end loop;
+    end if;
+
+    v_races := '{}';
+    if jsonb_typeof(p -> 'races') = 'array' then
+      for x in select jsonb_array_elements_text(p -> 'races') limit 50 loop
+        v_rid := _ensure_race(x);
+        if v_rid is not null and not v_rid = any(v_races) then v_races := v_races || v_rid; end if;
+      end loop;
+    end if;
+
+    insert into handouts (name, gym, level, size, note, items, race_ids)
+    values (v_name, v_gym, v_level, v_size, left(trim(coalesce(p ->> 'note', '')), 1000), v_items, v_races);
+    n_added := n_added + 1;
+  end loop;
+
+  return jsonb_build_object('added', n_added, 'skipped', n_skipped);
+end $$;
+
+revoke execute on function public._ensure_race(text), public._ensure_item(text),
+  public.bulk_add_people(uuid, jsonb) from public, anon, authenticated;
+grant execute on function public.bulk_add_people(uuid, jsonb) to anon, authenticated;
