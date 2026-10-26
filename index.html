@@ -1,209 +1,197 @@
 <title>Grey Athlete Kit Log</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap">
 <style>
-/* Layout: one column — issue form on top, filter bar, then a list of handout cards grouped by batch */
+/* Layout: mobile-first single column — sticky header with search, people list, fixed Add button, full-screen add/edit sheet. Deliberately white, single theme. */
 :root{
-  --bg:#eef0f2; --surface:#ffffff; --line:#d5d9de; --fg:#1b2026; --muted:#5d6670;
-  --accent:#1f4fd1; --accent-ink:#ffffff; --good:#17804a; --good-bg:#e3f3ea; --danger:#b42323;
-  --off:#f3f4f6;
-  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
-  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
-  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light;
+  --bg:#ffffff; --soft:#f5f6f8; --line:#e8eaee; --fg:#111418; --muted:#6b7380;
+  --accent:#111418; --accent-ink:#ffffff; --good:#14804a; --good-soft:#e8f6ee; --danger:#c62828;
+  --f:"Figtree",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --gutter-l:max(16px,env(safe-area-inset-left,0px));
+  --gutter-r:max(16px,env(safe-area-inset-right,0px));
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#12161b; --surface:#1b2128; --line:#2f3741; --fg:#e7eaee; --muted:#9aa4af;
-  --accent:#6f95ff; --accent-ink:#0d1220; --good:#55c98a; --good-bg:#183428; --danger:#ff7b7b; --off:#232a32; color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#12161b; --surface:#1b2128; --line:#2f3741; --fg:#e7eaee; --muted:#9aa4af;
-  --accent:#6f95ff; --accent-ink:#0d1220; --good:#55c98a; --good-bg:#183428; --danger:#ff7b7b; --off:#232a32; color-scheme:dark}
-*{box-sizing:border-box}
-body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.45}
-.wrap{max-width:980px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:20px}
-h1{font-family:var(--f-display);font-weight:700;font-size:34px;letter-spacing:.01em;margin:0;text-transform:uppercase;line-height:1}
-h2{font-family:var(--f-display);font-weight:600;font-size:20px;text-transform:uppercase;letter-spacing:.04em;margin:0}
-.top{display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap}
-.sub{color:var(--muted);margin:4px 0 0}
-.status{font-size:13px;color:var(--muted)}
-.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:14px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
-label.f{display:grid;gap:4px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);min-width:0}
-input,select,textarea{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:9px 10px;width:100%;min-width:0}
-textarea{resize:vertical;min-height:70px}
-input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,.chip:focus-within{outline:2px solid var(--accent);outline-offset:2px}
-.items{display:flex;flex-wrap:wrap;gap:8px}
-.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:7px 12px;cursor:pointer;user-select:none;background:var(--off);font-size:14px}
-.chip input{width:auto;margin:0;accent-color:var(--good)}
-.chip:has(input:checked){background:var(--good-bg);border-color:var(--good);color:var(--fg)}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-button{font:inherit;cursor:pointer;border-radius:6px;padding:10px 18px;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
-button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-family:var(--f-display);font-size:20px;letter-spacing:.06em;text-transform:uppercase;padding:8px 28px}
-button.ghost{border-color:transparent;background:transparent;color:var(--muted);padding:6px 10px;font-size:13px}
-button.danger{color:var(--danger)}
-button:disabled{opacity:.5;cursor:not-allowed}
-.msg{font-size:13px;color:var(--danger)}
-.msg.ok{color:var(--good)}
-.filters{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}
-@media (max-width:560px){.filters{grid-template-columns:1fr 1fr}.filters .search{grid-column:1/-1}}
-.totals{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted)}
-.totals b{color:var(--fg);font-variant-numeric:tabular-nums}
-.batch{display:grid;gap:10px}
-.batch-head{display:flex;align-items:baseline;gap:10px;border-bottom:1px solid var(--line);padding-bottom:6px}
-.code{font-family:var(--f-mono);font-size:13px;background:var(--off);border:1px solid var(--line);border-radius:4px;padding:1px 6px}
-.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;gap:10px;min-width:0}
-.card .who{display:flex;justify-content:space-between;gap:8px;align-items:start}
-.card .name{font-weight:600;font-size:16px;overflow-wrap:anywhere}
-.card .meta{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
-.card .date{font-family:var(--f-mono);font-size:12px;color:var(--muted);white-space:nowrap}
-.checks{display:flex;flex-wrap:wrap;gap:6px}
-.tick{font-size:13px;border-radius:999px;padding:3px 10px;border:1px solid var(--line);background:var(--off);color:var(--muted);cursor:pointer}
-.tick.on{background:var(--good-bg);border-color:var(--good);color:var(--fg)}
-.tick.on::before{content:"✓ ";color:var(--good);font-weight:700}
-.note{font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere;border-left:2px solid var(--line);padding-left:8px}
-.actions{display:flex;gap:4px;justify-content:flex-end}
-.empty{color:var(--muted);text-align:center;padding:28px 12px;border:1px dashed var(--line);border-radius:10px}
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--fg);font-family:var(--f);font-size:16px;line-height:1.4}
+body.locked{overflow:hidden}
+.page{max-width:640px;margin:0 auto;padding-bottom:calc(110px + env(safe-area-inset-bottom,0px))}
+.pad{padding-left:var(--gutter-l);padding-right:var(--gutter-r)}
+
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:18px 12px;display:grid;gap:12px;border-bottom:1px solid var(--line)}
+.title-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+h1{font-size:24px;font-weight:700;margin:0;letter-spacing:-.01em}
+.count{color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums}
+input,select,textarea{font:inherit;font-size:16px;color:var(--fg);background:var(--soft);border:1px solid transparent;border-radius:12px;padding:12px 14px;width:100%;min-width:0;appearance:none;-webkit-appearance:none}
+select{background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:34px}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--fg);background:var(--bg)}
+button:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.filters{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.filters select{padding-block:9px;font-size:15px}
+
+.status{font-size:13px;color:var(--muted);padding-block:10px 0}
+.group-head{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-block:18px 6px;display:flex;justify-content:space-between}
+ul{list-style:none;margin:0;padding:0}
+.person{border-bottom:1px solid var(--line)}
+.row{display:flex;align-items:center;gap:12px;width:100%;background:none;border:0;padding:14px 0;text-align:left;color:inherit;font:inherit;cursor:pointer}
+.avatar{flex:none;width:42px;height:42px;border-radius:50%;background:var(--soft);display:grid;place-items:center;font-weight:600;color:var(--muted)}
+.who{flex:1;min-width:0}
+.name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta{font-size:14px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.score{flex:none;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;padding:4px 10px;border-radius:999px;background:var(--soft);color:var(--muted)}
+.score.full{background:var(--good-soft);color:var(--good)}
+.detail{padding:0 0 16px 54px;display:grid;gap:12px}
+.ticks{display:flex;flex-wrap:wrap;gap:8px}
+.tick{font:inherit;font-size:14px;border-radius:999px;padding:8px 14px;border:1px solid var(--line);background:var(--bg);color:var(--muted);cursor:pointer}
+.tick.on{background:var(--good-soft);border-color:transparent;color:var(--good);font-weight:600}
+.tick.on::before{content:"✓ "}
+.facts{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:14px;color:var(--muted)}
+.facts b{color:var(--fg);font-weight:500}
+.note{font-size:14px;background:var(--soft);border-radius:10px;padding:10px 12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.actions{display:flex;gap:8px}
+.btn-sm{font:inherit;font-size:14px;font-weight:600;border-radius:10px;padding:9px 16px;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer}
+.btn-sm.danger{color:var(--danger)}
+.empty{text-align:center;color:var(--muted);padding:56px 20px;display:grid;gap:6px}
+.empty b{color:var(--fg);font-size:17px}
+
+.fab-bar{position:fixed;left:0;right:0;bottom:0;z-index:6;padding-top:12px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0px));padding-left:var(--gutter-l);padding-right:var(--gutter-r);background:linear-gradient(to top,var(--bg) 70%,rgba(255,255,255,0))}
+.fab{display:block;width:100%;max-width:608px;margin:0 auto;font:inherit;font-size:17px;font-weight:600;border:0;border-radius:14px;padding:16px;background:var(--accent);color:var(--accent-ink);cursor:pointer;box-shadow:0 6px 20px rgba(17,20,24,.18)}
+.fab:disabled{opacity:.4;cursor:not-allowed}
+
+/* Add / edit sheet */
+.sheet{position:fixed;inset:0;z-index:20;background:rgba(17,20,24,.35);display:flex;align-items:flex-end;justify-content:center}
+.panel{background:var(--bg);width:100%;max-width:640px;height:100%;display:flex;flex-direction:column}
+@media (min-width:700px){.sheet{align-items:center;padding:24px}.panel{height:auto;max-height:92vh;border-radius:18px}}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:calc(12px + env(safe-area-inset-top,0px));padding-bottom:12px;padding-left:var(--gutter-l);padding-right:var(--gutter-r);border-bottom:1px solid var(--line)}
+.panel-head h2{font-size:17px;margin:0;font-weight:700}
+.link{font:inherit;font-size:16px;background:none;border:0;color:var(--muted);padding:6px 4px;cursor:pointer}
+.link.strong{color:var(--fg);font-weight:700}
+.panel-body{overflow-y:auto;padding-block:16px 24px;padding-left:var(--gutter-l);padding-right:var(--gutter-r);display:grid;gap:18px;-webkit-overflow-scrolling:touch}
+.field{display:grid;gap:6px}
+.lbl{font-size:13px;font-weight:600;color:var(--muted)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{font:inherit;font-size:15px;flex:1 0 auto;min-width:52px;border-radius:10px;padding:10px 12px;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--fg);border-color:var(--fg);color:var(--bg);font-weight:600}
+.checklist{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.check{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;cursor:pointer;border-top:1px solid var(--line);font-size:16px}
+.check:first-child{border-top:0}
+.check input{appearance:none;-webkit-appearance:none;width:26px;height:26px;border-radius:8px;border:2px solid var(--line);background:var(--bg);padding:0;flex:none;display:grid;place-items:center;cursor:pointer}
+.check input:checked{background:var(--good);border-color:var(--good)}
+.check input:checked::after{content:"";width:7px;height:12px;border:solid #fff;border-width:0 2.5px 2.5px 0;transform:translateY(-1px) rotate(45deg)}
+.check input:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+textarea{min-height:90px;resize:vertical}
+.msg{font-size:14px;color:var(--danger);min-height:1em}
+.toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);font-size:14px;padding:10px 16px;border-radius:999px;z-index:30;max-width:calc(100% - 32px)}
+@media (prefers-reduced-motion:no-preference){.panel{animation:up .22s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}}
 </style>
 
-<div class="wrap">
-  <header class="top">
-    <div>
-      <h1>Grey Athlete Kit Log</h1>
-      <p class="sub">Who got what, from which gym, in which batch.</p>
+<div class="page">
+  <header class="pad">
+    <div class="title-row">
+      <h1>Kit Log</h1>
+      <span class="count" id="count"></span>
     </div>
-    <span class="status" id="status">Connecting…</span>
+    <input id="qSearch" type="search" placeholder="Search name, gym or note" aria-label="Search" autocomplete="off">
+    <div class="filters">
+      <select id="qBatch" aria-label="Filter by batch"><option value="">All batches</option></select>
+      <select id="qGym" aria-label="Filter by gym"><option value="">All gyms</option></select>
+    </div>
   </header>
 
+  <div class="pad">
+    <div class="status" id="status">Connecting…</div>
+    <div id="list"></div>
+  </div>
+</div>
+
+<div class="fab-bar"><button class="fab" id="addBtn" type="button">+ Add person</button></div>
+
+<div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
   <form class="panel" id="form" novalidate>
-    <div class="row" style="justify-content:space-between">
-      <h2 id="formTitle">Add athlete</h2>
-      <button type="button" class="ghost" id="cancelEdit" hidden>Cancel edit</button>
+    <div class="panel-head">
+      <button type="button" class="link" id="closeBtn">Cancel</button>
+      <h2 id="sheetTitle">Add person</h2>
+      <button type="submit" class="link strong" id="saveBtn">Save</button>
     </div>
-    <div class="grid">
-      <label class="f">Name<input id="fName" required autocomplete="off" maxlength="80"></label>
-      <label class="f">Gym<input id="fGym" list="gymList" autocomplete="off" maxlength="80"></label>
-      <label class="f">Level
-        <select id="fLevel">
-          <option value="">Choose…</option>
-          <option>Beginner</option><option>Intermediate</option><option>Advanced</option>
-        </select>
-      </label>
-      <label class="f">T-shirt size
-        <select id="fSize">
-          <option value="">Choose…</option>
-          <option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option><option>XXXL</option>
-        </select>
-      </label>
-      <label class="f">Batch<input id="fBatch" list="batchList" placeholder="T-100" autocomplete="off" maxlength="40"></label>
-      <label class="f">Date<input id="fDate" type="date"></label>
-    </div>
-    <div class="f" style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Items given</div>
-    <div class="items" id="itemBoxes"></div>
-    <label class="f">Note<textarea id="fNote" maxlength="1000" placeholder="Anything to remember (missing size, to collect later…)"></textarea></label>
-    <div class="row">
-      <button type="submit" class="primary" id="submitBtn">Add</button>
-      <span class="msg" id="formMsg" role="status"></span>
+    <div class="panel-body">
+      <label class="field"><span class="lbl">Name</span><input id="fName" autocomplete="off" maxlength="80" placeholder="Full name"></label>
+      <label class="field"><span class="lbl">Gym</span><input id="fGym" list="gymList" autocomplete="off" maxlength="80" placeholder="Gym name"></label>
+      <div class="field"><span class="lbl">Level</span><div class="seg" id="segLevel"></div></div>
+      <div class="field"><span class="lbl">T-shirt size</span><div class="seg" id="segSize"></div></div>
+      <div class="two">
+        <label class="field"><span class="lbl">Batch</span><input id="fBatch" list="batchList" autocomplete="off" maxlength="40" placeholder="T-100"></label>
+        <label class="field"><span class="lbl">Date</span><input id="fDate" type="date"></label>
+      </div>
+      <div class="field"><span class="lbl">Items given</span><div class="checklist" id="checklist"></div></div>
+      <label class="field"><span class="lbl">Note</span><textarea id="fNote" maxlength="1000" placeholder="Optional"></textarea></label>
+      <div class="msg" id="formMsg" role="status"></div>
+      <button type="button" class="btn-sm danger" id="deleteBtn" hidden>Delete person</button>
     </div>
   </form>
-
-  <section class="panel">
-    <div class="row" style="justify-content:space-between">
-      <h2>Handouts</h2>
-      <div class="totals" id="totals"></div>
-    </div>
-    <div class="filters">
-      <input class="search" id="qSearch" type="search" placeholder="Search name, gym or note" aria-label="Search">
-      <select id="qGym" aria-label="Filter by gym"><option value="">All gyms</option></select>
-      <select id="qBatch" aria-label="Filter by batch"><option value="">All batches</option></select>
-    </div>
-    <div id="list"><div class="empty">Loading the shared list…</div></div>
-  </section>
-
-  <datalist id="gymList"></datalist>
-  <datalist id="batchList"></datalist>
 </div>
+
+<datalist id="gymList"></datalist>
+<datalist id="batchList"></datalist>
 
 <script>
 (() => {
-  const ITEMS = [
-    ["headband", "Head band"],
-    ["flag", "Flag"],
-    ["bag", "Bag"],
-    ["badge", "Badge"],
-    ["tshirt", "T-shirt"],
-  ];
+  const ITEMS = [["headband","Head band"],["flag","Flag"],["bag","Bag"],["badge","Badge"],["tshirt","T-shirt"]];
+  const LEVELS = ["Beginner","Intermediate","Advanced"];
+  const SIZES = ["XS","S","M","L","XL","XXL","XXXL"];
   const $ = (id) => document.getElementById(id);
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
-
-  let db = null, col = null, rows = [], editingId = null, armedDelete = null;
-
-  // Item checkboxes in the form
-  for (const [key, label] of ITEMS) {
-    const l = el("label", "chip");
-    const c = document.createElement("input");
-    c.type = "checkbox"; c.id = "it_" + key; c.value = key;
-    l.append(c, document.createTextNode(label));
-    $("itemBoxes").append(l);
-  }
-
+  const str = (v, max) => (typeof v === "string" ? v.trim().slice(0, max) : "");
   const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
   const fmtDate = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ""); return m ? `${+m[3]}-${+m[2]}-${m[1]}` : ""; };
-  const str = (v, max) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
-  function resetForm() {
-    $("form").reset();
-    $("fDate").value = today();
-    editingId = null;
-    $("formTitle").textContent = "Add athlete";
-    $("submitBtn").textContent = "Add";
-    $("cancelEdit").hidden = true;
+  let col = null, rows = [], editingId = null, openId = null, armedDelete = false;
+  let level = "", size = "";
+  let last = { batch: "", date: "", gym: "" };   // reused for the next add
+
+  // Segmented pickers
+  function buildSeg(box, values, get, set) {
+    for (const v of values) {
+      const b = el("button", null, v); b.type = "button";
+      b.addEventListener("click", () => { set(get() === v ? "" : v); syncSeg(box, get()); });
+      box.append(b);
+    }
   }
-  resetForm();
+  function syncSeg(box, value) { for (const b of box.children) b.setAttribute("aria-pressed", String(b.textContent === value)); }
+  buildSeg($("segLevel"), LEVELS, () => level, (v) => (level = v));
+  buildSeg($("segSize"), SIZES, () => size, (v) => (size = v));
 
-  function readForm() {
-    const items = {};
-    for (const [k] of ITEMS) items[k] = $("it_" + k).checked;
-    return {
-      name: str($("fName").value, 80),
-      gym: str($("fGym").value, 80),
-      level: str($("fLevel").value, 20),
-      size: str($("fSize").value, 10),
-      batch: str($("fBatch").value, 40).toUpperCase(),
-      date: $("fDate").value || today(),
-      note: str($("fNote").value, 1000),
-      items,
-    };
+  for (const [k, label] of ITEMS) {
+    const l = el("label", "check");
+    const c = document.createElement("input"); c.type = "checkbox"; c.id = "it_" + k;
+    l.append(el("span", null, label), c);
+    $("checklist").append(l);
   }
 
-  function setMsg(text, ok) { const m = $("formMsg"); m.textContent = text; m.classList.toggle("ok", !!ok); }
+  // Sheet
+  function openSheet(r) {
+    editingId = r ? r.id : null; armedDelete = false;
+    $("sheetTitle").textContent = r ? "Edit person" : "Add person";
+    $("fName").value = r ? r.name : "";
+    $("fGym").value = r ? r.gym : last.gym;
+    $("fBatch").value = r ? r.batch : last.batch;
+    $("fDate").value = r ? r.date || today() : last.date || today();
+    $("fNote").value = r ? r.note : "";
+    level = r ? r.level : ""; size = r ? r.size : "";
+    syncSeg($("segLevel"), level); syncSeg($("segSize"), size);
+    for (const [k] of ITEMS) $("it_" + k).checked = r ? !!r.items[k] : false;
+    $("deleteBtn").hidden = !r; $("deleteBtn").textContent = "Delete person";
+    $("formMsg").textContent = "";
+    $("sheet").hidden = false; document.body.classList.add("locked");
+    if (!r) setTimeout(() => $("fName").focus(), 50);
+  }
+  function closeSheet() { $("sheet").hidden = true; document.body.classList.remove("locked"); editingId = null; }
 
-  $("form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    if (!col) { setMsg("The shared list isn't connected, so nothing can be saved right now."); return; }
-    const data = readForm();
-    if (!data.name) { setMsg("Enter a name first."); $("fName").focus(); return; }
-    const btn = $("submitBtn"); btn.disabled = true;
-    try {
-      if (editingId) {
-        await col.doc(editingId).update({ ...data, updatedAt: Date.now() });
-        setMsg("Saved changes for " + data.name + ".", true);
-      } else {
-        await col.add({ ...data, createdAt: Date.now() });
-        setMsg("Added " + data.name + ".", true);
-      }
-      const keepBatch = data.batch, keepDate = data.date, keepGym = data.gym;
-      resetForm();
-      // Handing out a batch usually means many people in a row: keep batch, date and gym.
-      $("fBatch").value = keepBatch; $("fDate").value = keepDate; $("fGym").value = keepGym;
-      $("fName").focus();
-    } catch (err) {
-      setMsg(errorText(err));
-    } finally { btn.disabled = false; }
-  });
-
-  $("cancelEdit").addEventListener("click", () => { resetForm(); setMsg(""); });
+  $("addBtn").addEventListener("click", () => openSheet(null));
+  $("closeBtn").addEventListener("click", closeSheet);
+  $("sheet").addEventListener("click", (e) => { if (e.target === $("sheet")) closeSheet(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("sheet").hidden) closeSheet(); });
 
   function errorText(err) {
     const c = err && err.code;
@@ -211,33 +199,48 @@ button:disabled{opacity:.5;cursor:not-allowed}
     if (c === "not_granted" || c === "revoked") return "You have view-only access, so you can't change the list.";
     return "Couldn't save. Check your connection and try again.";
   }
-
-  function startEdit(r) {
-    editingId = r.id;
-    $("fName").value = r.name; $("fGym").value = r.gym; $("fLevel").value = r.level;
-    $("fSize").value = r.size; $("fBatch").value = r.batch; $("fDate").value = r.date; $("fNote").value = r.note;
-    for (const [k] of ITEMS) $("it_" + k).checked = !!r.items[k];
-    $("formTitle").textContent = "Edit " + r.name;
-    $("submitBtn").textContent = "Save";
-    $("cancelEdit").hidden = false;
-    setMsg("");
-    $("form").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  let toastTimer;
+  function toast(text) {
+    let t = document.querySelector(".toast"); if (!t) { t = el("div", "toast"); t.setAttribute("role", "status"); document.body.append(t); }
+    t.textContent = text; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 2200);
   }
 
-  async function toggleItem(r, key) {
-    try { await col.doc(r.id).update({ items: { ...r.items, [key]: !r.items[key] }, updatedAt: Date.now() }); }
-    catch (err) { $("status").textContent = errorText(err); }
-  }
+  $("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!col) { $("formMsg").textContent = "The shared list isn't connected, so nothing can be saved."; return; }
+    const items = {}; for (const [k] of ITEMS) items[k] = $("it_" + k).checked;
+    const data = {
+      name: str($("fName").value, 80), gym: str($("fGym").value, 80),
+      level: str(level, 20), size: str(size, 10),
+      batch: str($("fBatch").value, 40).toUpperCase(), date: $("fDate").value || today(),
+      note: str($("fNote").value, 1000), items,
+    };
+    if (!data.name) { $("formMsg").textContent = "Enter a name."; $("fName").focus(); return; }
+    const btn = $("saveBtn"); btn.disabled = true;
+    try {
+      if (editingId) { await col.doc(editingId).update({ ...data, updatedAt: Date.now() }); toast("Saved " + data.name); }
+      else { await col.add({ ...data, createdAt: Date.now() }); toast("Added " + data.name); }
+      last = { batch: data.batch, date: data.date, gym: data.gym };
+      closeSheet();
+    } catch (err) { $("formMsg").textContent = errorText(err); }
+    finally { btn.disabled = false; }
+  });
 
-  async function remove(r) {
-    try { await col.doc(r.id).delete(); if (editingId === r.id) resetForm(); }
-    catch (err) { $("status").textContent = errorText(err); }
+  $("deleteBtn").addEventListener("click", async () => {
+    if (!armedDelete) { armedDelete = true; $("deleteBtn").textContent = "Tap again to delete"; return; }
+    const id = editingId;
+    try { await col.doc(id).delete(); if (openId === id) openId = null; closeSheet(); toast("Deleted"); }
+    catch (err) { $("formMsg").textContent = errorText(err); }
+  });
+
+  async function toggleItem(r, k) {
+    try { await col.doc(r.id).update({ items: { ...r.items, [k]: !r.items[k] }, updatedAt: Date.now() }); }
+    catch (err) { toast(errorText(err)); }
   }
 
   function clean(snap) {
     const d = snap.data() || {};
-    const items = {};
-    for (const [k] of ITEMS) items[k] = !!(d.items && d.items[k] === true);
+    const items = {}; for (const [k] of ITEMS) items[k] = !!(d.items && d.items[k] === true);
     return {
       id: snap.id, items,
       name: str(d.name, 80) || "Unnamed", gym: str(d.gym, 80), level: str(d.level, 20), size: str(d.size, 10),
@@ -245,111 +248,99 @@ button:disabled{opacity:.5;cursor:not-allowed}
       createdAt: typeof d.createdAt === "number" ? d.createdAt : 0,
     };
   }
-
   function fillSelect(sel, values, allLabel) {
-    const cur = sel.value;
-    sel.replaceChildren(new Option(allLabel, ""));
+    const cur = sel.value; sel.replaceChildren(new Option(allLabel, ""));
     for (const v of values) sel.append(new Option(v, v));
     sel.value = values.includes(cur) ? cur : "";
   }
-  function fillDatalist(dl, values) { dl.replaceChildren(...values.map((v) => new Option(v))); }
 
   function render() {
     const gyms = [...new Set(rows.map((r) => r.gym).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-    const batches = [...new Set(rows.map((r) => r.batch).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-    fillSelect($("qGym"), gyms, "All gyms");
-    fillSelect($("qBatch"), batches, "All batches");
-    fillDatalist($("gymList"), gyms);
-    fillDatalist($("batchList"), batches);
+    const batches = [...new Set(rows.map((r) => r.batch).filter(Boolean))].sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+    fillSelect($("qGym"), gyms, "All gyms"); fillSelect($("qBatch"), batches, "All batches");
+    $("gymList").replaceChildren(...gyms.map((v) => new Option(v)));
+    $("batchList").replaceChildren(...batches.map((v) => new Option(v)));
 
-    const q = $("qSearch").value.trim().toLowerCase();
-    const g = $("qGym").value, b = $("qBatch").value;
-    const shown = rows.filter((r) =>
-      (!g || r.gym === g) && (!b || r.batch === b) &&
+    const q = $("qSearch").value.trim().toLowerCase(), g = $("qGym").value, b = $("qBatch").value;
+    const shown = rows.filter((r) => (!g || r.gym === g) && (!b || r.batch === b) &&
       (!q || (r.name + " " + r.gym + " " + r.note).toLowerCase().includes(q)));
-
-    // Totals for what's on screen
-    const t = $("totals"); t.replaceChildren();
-    const add = (label, n) => { const s = el("span"); s.append(el("b", null, String(n)), document.createTextNode(" " + label)); t.append(s); };
-    add(shown.length === 1 ? "person" : "people", shown.length);
-    for (const [k, label] of ITEMS) add(label, shown.filter((r) => r.items[k]).length);
+    $("count").textContent = rows.length ? `${shown.length} of ${rows.length}` : "";
 
     const list = $("list"); list.replaceChildren();
     if (!rows.length) {
-      list.append(el("div", "empty", "No handouts yet. Fill in the form above and tap Add to log the first athlete."));
-      return;
+      const e = el("div", "empty"); e.append(el("b", null, "No one added yet"), el("span", null, "Tap Add person to log who got which items."));
+      list.append(e); return;
     }
-    if (!shown.length) { list.append(el("div", "empty", "Nobody matches these filters.")); return; }
+    if (!shown.length) { const e = el("div", "empty"); e.append(el("b", null, "No matches"), el("span", null, "Try a different search or filter.")); list.append(e); return; }
 
-    // Group by batch, newest batch first; within a batch, newest entry first
     const groups = new Map();
-    for (const r of shown) { const k = r.batch || ""; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); }
+    for (const r of shown) { const k = r.batch; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); }
     const keys = [...groups.keys()].sort((a, b) => (a === "") - (b === "") || b.localeCompare(a, undefined, { numeric: true }));
-    const wrap = el("div"); wrap.style.cssText = "display:grid;gap:22px";
     for (const k of keys) {
-      const sec = el("div", "batch");
-      const head = el("div", "batch-head");
-      head.append(k ? el("span", "code", k) : el("span", "meta", "No batch"),
-                  el("span", "status", groups.get(k).length + (groups.get(k).length === 1 ? " person" : " people")));
-      const cards = el("div", "cards");
-      for (const r of groups.get(k).sort((a, b) => b.createdAt - a.createdAt)) cards.append(card(r));
-      sec.append(head, cards);
-      wrap.append(sec);
+      const people = groups.get(k).sort((a, b) => b.createdAt - a.createdAt);
+      const head = el("div", "group-head");
+      head.append(el("span", null, k || "No batch"), el("span", null, people.length + (people.length === 1 ? " person" : " people")));
+      const ul = el("ul");
+      for (const r of people) ul.append(personRow(r));
+      list.append(head, ul);
     }
-    list.append(wrap);
   }
 
-  function card(r) {
-    const c = el("article", "card");
+  function personRow(r) {
+    const li = el("li", "person");
+    const given = ITEMS.filter(([k]) => r.items[k]).length;
+    const row = el("button", "row"); row.type = "button"; row.setAttribute("aria-expanded", String(openId === r.id));
+    const initials = r.name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
     const who = el("div", "who");
-    const left = el("div"); left.style.minWidth = "0";
-    left.append(el("div", "name", r.name));
-    const meta = [r.gym, r.level, r.size && "Size " + r.size].filter(Boolean).join(" · ");
-    if (meta) left.append(el("div", "meta", meta));
-    who.append(left, el("span", "date", fmtDate(r.date)));
-    c.append(who);
+    who.append(el("div", "name", r.name), el("div", "meta", [r.gym, r.size].filter(Boolean).join(" · ") || "—"));
+    row.append(el("div", "avatar", initials || "?"), who, el("span", "score" + (given === ITEMS.length ? " full" : ""), `${given}/${ITEMS.length}`));
+    row.addEventListener("click", () => { openId = openId === r.id ? null : r.id; render(); });
+    li.append(row);
 
-    const checks = el("div", "checks");
-    for (const [k, label] of ITEMS) {
-      const btn = el("button", "tick" + (r.items[k] ? " on" : ""), label);
-      btn.type = "button";
-      btn.setAttribute("aria-pressed", String(r.items[k]));
-      btn.title = r.items[k] ? "Given — tap to unmark" : "Not given — tap to mark as given";
-      btn.addEventListener("click", () => toggleItem(r, k));
-      checks.append(btn);
+    if (openId === r.id) {
+      const d = el("div", "detail");
+      const ticks = el("div", "ticks");
+      for (const [k, label] of ITEMS) {
+        const t = el("button", "tick" + (r.items[k] ? " on" : ""), label); t.type = "button";
+        t.setAttribute("aria-pressed", String(r.items[k]));
+        t.addEventListener("click", () => toggleItem(r, k));
+        ticks.append(t);
+      }
+      const facts = el("div", "facts");
+      const fact = (label, v) => { if (!v) return; const s = el("span", null, label + " "); s.append(el("b", null, v)); facts.append(s); };
+      fact("Level", r.level); fact("Size", r.size); fact("Date", fmtDate(r.date));
+      d.append(ticks);
+      if (facts.childElementCount) d.append(facts);
+      if (r.note) d.append(el("div", "note", r.note));
+      const act = el("div", "actions");
+      const edit = el("button", "btn-sm", "Edit"); edit.type = "button"; edit.addEventListener("click", () => openSheet(r));
+      act.append(edit); d.append(act);
+      li.append(d);
     }
-    c.append(checks);
-    if (r.note) c.append(el("div", "note", r.note));
-
-    const act = el("div", "actions");
-    const edit = el("button", "ghost", "Edit"); edit.type = "button"; edit.addEventListener("click", () => startEdit(r));
-    const del = el("button", "ghost danger", armedDelete === r.id ? "Tap again to delete" : "Delete"); del.type = "button";
-    del.addEventListener("click", () => {
-      if (armedDelete === r.id) { armedDelete = null; remove(r); }
-      else { armedDelete = r.id; render(); setTimeout(() => { if (armedDelete === r.id) { armedDelete = null; render(); } }, 4000); }
-    });
-    act.append(edit, del);
-    c.append(act);
-    return c;
+    return li;
   }
 
   for (const id of ["qSearch", "qGym", "qBatch"]) $(id).addEventListener("input", render);
+  render();
+  $("status").textContent = "Connecting…";
 
   (async () => {
+    let db = null;
     try { db = window.claude ? await window.claude.use("db") : null; } catch { db = null; }
     if (!db) {
-      $("status").textContent = "Offline: open this page signed in to claude.ai to use the shared list.";
-      $("list").replaceChildren(el("div", "empty", "The shared list isn't available in this view."));
-      $("submitBtn").disabled = true;
-      return;
+      $("status").textContent = "Open this page signed in to claude.ai to see the shared list.";
+      $("addBtn").disabled = true; return;
     }
     col = db.collection("handouts");
     col.onSnapshot((snap) => {
       rows = snap.docs.map(clean);
-      $("status").textContent = "Live · shared with your team";
+      if (openId && !rows.some((r) => r.id === openId)) openId = null;
+      $("status").textContent = "";
+      $("status").hidden = true;
       render();
     }, (err) => {
-      $("status").textContent = err && err.code === "revoked" ? "Access to the list was removed." : "Lost connection to the list. Reload the page.";
+      $("status").hidden = false;
+      $("status").textContent = err && err.code === "revoked" ? "Access to the list was removed." : "Lost connection. Reload the page.";
     });
   })();
 })();
