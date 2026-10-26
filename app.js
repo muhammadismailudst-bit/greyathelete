@@ -13,6 +13,8 @@
   const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
   const fmtDate = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ""); return m ? `${+m[3]}-${+m[2]}-${m[1]}` : ""; };
   const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || "");
+  const QMAX = 999;
+  const qtyOf = (v) => (v === true ? 1 : Number.isFinite(v) ? Math.max(0, Math.min(QMAX, Math.floor(v))) : 0);
 
   // ---------- Config ----------
   const cfg = window.KIT_CONFIG || {};
@@ -62,6 +64,7 @@
   let last = { date: "", gym: "", races: [] };
   let manageEditing = null;                 // "race:<id>" | "item:<id>"
   let loadSeq = 0, timer = null;
+  const pendingQty = new Map(), qtyTimers = new Map();   // "personId|itemId" -> qty not yet saved
 
   const raceById = () => new Map(races.map((r) => [r.id, r]));
 
@@ -116,7 +119,7 @@
   // ---------- Data ----------
   function cleanPerson(d) {
     const its = {};
-    if (d.items && typeof d.items === "object") for (const k of Object.keys(d.items)) if (d.items[k] === true) its[k] = true;
+    if (d.items && typeof d.items === "object") for (const k of Object.keys(d.items)) { const q = qtyOf(d.items[k]); if (q) its[k] = q; }
     return {
       id: String(d.id), items: its,
       races: Array.isArray(d.races) ? d.races.map(String) : [],
@@ -131,6 +134,7 @@
       const data = await call("list_all", {});
       if (seq !== loadSeq) return;
       people = (Array.isArray(data && data.people) ? data.people : []).map(cleanPerson);
+      for (const [k, q] of pendingQty) { const [pid, iid] = k.split("|"); const pp = people.find((x) => x.id === pid); if (pp) { if (q) pp.items[iid] = q; else delete pp.items[iid]; } }
       races = (Array.isArray(data && data.races) ? data.races : []).map((r) => ({ id: String(r.id), name: str(r.name, 60), date: str(r.date, 10), note: str(r.note, 2000) }));
       items = (Array.isArray(data && data.items) ? data.items : []).map((i) => ({ id: String(i.id), name: str(i.name, 40) }));
       if (openId && !people.some((p) => p.id === openId)) openId = null;
@@ -171,6 +175,13 @@
   }
   const checkedIn = (box) => [...box.querySelectorAll("input[type=checkbox]:checked")].map((c) => c.value);
 
+  let formQty = {};
+  function renderFormItems() {
+    const box = $("checklist"); box.replaceChildren();
+    if (!items.length) { box.append(el("div", "check muted", "No items yet. Add them under ⋯ → Races & items.")); return; }
+    for (const it of items) box.append(stepper(it.name, formQty[it.id] || 0, (q) => { formQty[it.id] = Math.max(0, Math.min(QMAX, q)); renderFormItems(); }));
+  }
+
   function openSheet(p) {
     editingId = p ? p.id : null;
     $("sheetTitle").textContent = p ? "Edit person" : "Add person";
@@ -182,8 +193,9 @@
     syncSeg($("segLevel"), level); syncSeg($("segSize"), size);
     const presetRace = $("qRace").value;
     const raceSet = new Set(p ? p.races : (presetRace ? [presetRace] : last.races));
-    fillChecklist($("raceChecklist"), races, raceSet, "race_", "No races yet. Add them in Races & items.");
-    fillChecklist($("checklist"), items, new Set(p ? Object.keys(p.items) : []), "item_", "No items yet. Add them in Races & items.");
+    fillChecklist($("raceChecklist"), races, raceSet, "race_", "No races yet. Add them under ⋯ → Races & items.");
+    formQty = p ? { ...p.items } : {};
+    renderFormItems();
     $("deleteBtn").hidden = !p; $("deleteBtn").textContent = "Delete person"; armedDelete = null;
     $("formMsg").textContent = "";
     $("toast").hidden = true;
@@ -202,7 +214,7 @@
 
   $("form").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const its = {}; for (const id of checkedIn($("checklist"))) its[id] = true;
+    const its = {}; for (const it of items) if (formQty[it.id] > 0) its[it.id] = formQty[it.id];
     const data = {
       name: str($("fName").value, 80), gym: str($("fGym").value, 80),
       level: LEVELS.includes(level) ? level : "", size: SIZES.includes(size) ? size : "",
@@ -235,16 +247,40 @@
     if (await deletePerson(id, name)) closeSheet();
   });
 
-  async function toggle(p, kind, id) {
-    const on = kind === "item" ? !p.items[id] : !p.races.includes(id);
-    if (kind === "item") { if (on) p.items[id] = true; else delete p.items[id]; }
-    else p.races = on ? [...p.races, id] : p.races.filter((r) => r !== id);
+  async function toggleRace(p, id) {
+    const on = !p.races.includes(id);
+    p.races = on ? [...p.races, id] : p.races.filter((r) => r !== id);
     render();
-    try {
-      await call(kind === "item" ? "toggle_item" : "toggle_race",
-        kind === "item" ? { p_id: p.id, p_item: id, p_value: on } : { p_id: p.id, p_race: id, p_value: on });
+    try { await call("toggle_race", { p_id: p.id, p_race: id, p_value: on }); load(); }
+    catch (err) { load(); if (err.code !== "locked") toast(errorText(err)); }
+  }
+
+  function setQty(p, id, qty) {
+    qty = Math.max(0, Math.min(QMAX, qty));
+    if (qty) p.items[id] = qty; else delete p.items[id];
+    const key = p.id + "|" + id;
+    pendingQty.set(key, qty);
+    render();
+    clearTimeout(qtyTimers.get(key));
+    qtyTimers.set(key, setTimeout(async () => {
+      qtyTimers.delete(key);
+      const sent = pendingQty.get(key);
+      try { await call("set_item_qty", { p_id: p.id, p_item: id, p_qty: sent }); }
+      catch (err) { if (err.code !== "locked") toast(errorText(err)); }
+      if (pendingQty.get(key) === sent && !qtyTimers.has(key)) pendingQty.delete(key);
       load();
-    } catch (err) { load(); if (err.code !== "locked") toast(errorText(err)); }
+    }, 450));
+  }
+
+  // − n + control. onChange gets the new number.
+  function stepper(label, qty, onChange) {
+    const row = el("div", "qty-row" + (qty ? " on" : ""));
+    const minus = btn("qty-btn", "−", () => onChange(qty - 1)); minus.disabled = qty <= 0; minus.setAttribute("aria-label", "One less " + label);
+    const plus = btn("qty-btn", "+", () => onChange(qty + 1)); plus.disabled = qty >= QMAX; plus.setAttribute("aria-label", "One more " + label);
+    const n = el("span", "qty-n", String(qty)); n.setAttribute("aria-live", "polite");
+    const ctl = el("div", "qty-ctl"); ctl.append(minus, n, plus);
+    row.append(el("span", "qty-name", label), ctl);
+    return row;
   }
 
   // ---------- Races & items sheet ----------
@@ -307,7 +343,7 @@
 
     const il = $("itemList"); il.replaceChildren();
     for (const it of items) {
-      const used = people.filter((p) => p.items[it.id]).length;
+      const used = people.reduce((n, p) => n + (p.items[it.id] || 0), 0);
       const li = el("li");
       if (manageEditing === "item:" + it.id) {
         const f = el("div", "m-edit");
@@ -355,6 +391,19 @@
     }
     return out;
   };
+  // "T-shirt x2", "T-shirt ×2", "T-shirt*2", "2x T-shirt", "2 T-shirt" -> {name, qty}
+  function parseItems(cell) {
+    const out = new Map();
+    for (const raw of String(cell || "").split(/[;|]/).map((x) => x.trim()).filter(Boolean)) {
+      let name = raw, qty = 1, m;
+      if ((m = /^(.*?)\s*[x×*]\s*(\d{1,3})$/i.exec(raw)) && m[1]) { name = m[1]; qty = +m[2]; }
+      else if ((m = /^(\d{1,3})\s*[x×*]?\s+(.+)$/i.exec(raw))) { qty = +m[1]; name = m[2]; }
+      name = name.trim().slice(0, 40); if (!name || qty <= 0) continue;
+      const k = name.toLowerCase(), prev = out.get(k);
+      out.set(k, { name: prev ? prev.name : name, qty: Math.min(QMAX, (prev ? prev.qty : 0) + qty) });
+    }
+    return [...out.values()];
+  }
   function normLevel(s) {
     const v = String(s || "").trim().toLowerCase();
     if (!v) return [""];
@@ -380,7 +429,7 @@
       if (i === 0 && c[0] && c[0].toLowerCase() === "name") return;      // header row
       const name = c[0].slice(0, 80), gym = (c[1] || "").slice(0, 80);
       const [level, lw] = normLevel(c[2]); const [size, sw] = normSize(c[3]);
-      const row = { name, gym, level, size, races: multi(c[4]), items: multi(c[5]),
+      const row = { name, gym, level, size, races: multi(c[4]), items: parseItems(c[5]),
         note: c.slice(6).filter(Boolean).join(", ").slice(0, 1000), warn: [lw, sw].filter(Boolean), skip: "" };
       const key = (name + "|" + gym).toLowerCase();
       if (!name) row.skip = "no name";
@@ -405,7 +454,7 @@
     const newR = new Map(), newI = new Map();
     for (const r of add) {
       for (const x of r.races) if (!knownR.has(x.toLowerCase())) newR.set(x.toLowerCase(), x);
-      for (const x of r.items) if (!knownI.has(x.toLowerCase())) newI.set(x.toLowerCase(), x);
+      for (const x of r.items) if (!knownI.has(x.name.toLowerCase())) newI.set(x.name.toLowerCase(), x.name);
     }
     const wrap = el("div", "preview");
     const head = el("div", "preview-head");
@@ -421,7 +470,7 @@
       const sub = [r.gym, r.level, r.size && "Size " + r.size].filter(Boolean).join(" · ");
       if (sub) li.append(el("span", "p-sub", sub));
       if (r.races.length) li.append(el("span", "p-sub", "Races: " + r.races.join(", ")));
-      if (r.items.length) li.append(el("span", "p-sub", "Items: " + r.items.join(", ")));
+      if (r.items.length) li.append(el("span", "p-sub", "Items: " + r.items.map((x) => x.qty > 1 ? `${x.name} ×${x.qty}` : x.name).join(", ")));
       if (r.note) li.append(el("span", "p-sub", "Note: " + r.note));
       for (const w of r.warn) li.append(el("span", "p-sub warn", w + " (left blank)"));
       ul.append(li);
@@ -496,7 +545,7 @@
   function personRow(p) {
     const li = el("li", "person");
     const rmap = raceById();
-    const given = items.filter((i) => p.items[i.id]).length;
+    const given = items.filter((i) => p.items[i.id] > 0).length;
     const row = el("button", "row"); row.type = "button"; row.setAttribute("aria-expanded", String(openId === p.id));
     const initials = p.name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
     const who = el("div", "who");
@@ -511,19 +560,15 @@
     if (openId === p.id) {
       const d = el("div", "detail");
       if (items.length) {
-        const t = el("div", "ticks");
-        for (const it of items) {
-          const on = !!p.items[it.id];
-          const b = btn("tick" + (on ? " on" : ""), it.name, () => toggle(p, "item", it.id));
-          b.setAttribute("aria-pressed", String(on)); t.append(b);
-        }
+        const t = el("div", "qty-list");
+        for (const it of items) t.append(stepper(it.name, p.items[it.id] || 0, (q) => setQty(p, it.id, q)));
         d.append(el("div", "sec-lbl", "Items given"), t);
       }
       if (races.length) {
         const t = el("div", "ticks");
         for (const r of races) {
           const on = p.races.includes(r.id);
-          const b = btn("tick race" + (on ? " on" : ""), r.name, () => toggle(p, "race", r.id));
+          const b = btn("tick race" + (on ? " on" : ""), r.name, () => toggleRace(p, r.id));
           b.setAttribute("aria-pressed", String(on)); t.append(b);
         }
         d.append(el("div", "sec-lbl", "Races done"), t);

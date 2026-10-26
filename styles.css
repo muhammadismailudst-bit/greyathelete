@@ -148,10 +148,25 @@ textarea{min-height:90px;resize:vertical}
 /* Header actions */
 .title-left{display:flex;align-items:baseline;gap:10px;min-width:0}
 .title-right{gap:8px}
-.add-btn{font:inherit;font-size:15px;font-weight:600;border:0;border-radius:999px;padding:8px 16px;background:var(--accent);color:var(--accent-ink);cursor:pointer}
-.icon-btn{font:inherit;font-size:20px;line-height:1;width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer;display:grid;place-items:center}
+.add-btn{font:inherit;font-size:17px;font-weight:600;border:0;border-radius:999px;padding:11px 20px;background:var(--accent);color:var(--accent-ink);cursor:pointer}
+.icon-btn{font:inherit;font-size:24px;line-height:1;width:46px;height:46px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer;display:grid;place-items:center}
 .menu-wrap{position:relative}
 .menu{position:absolute;right:0;top:calc(100% + 6px);z-index:15;background:var(--bg);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(17,20,24,.12);min-width:180px;padding:6px;display:grid}
 .menu button{font:inherit;font-size:15px;text-align:left;background:none;border:0;border-radius:8px;padding:11px 12px;color:var(--fg);cursor:pointer}
 .menu button:hover,.menu button:focus-visible{background:var(--soft)}
 .menu #lockBtn{color:var(--muted);border-top:1px solid var(--line);border-radius:0 0 8px 8px}
+
+/* Item quantities */
+.qty-list{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.qty-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 8px 8px 14px;border-top:1px solid var(--line);color:var(--muted)}
+.qty-row:first-child{border-top:0}
+.qty-row.on{color:var(--fg);background:var(--good-soft)}
+.qty-name{min-width:0;overflow-wrap:anywhere;font-size:15px}
+.qty-row.on .qty-name{font-weight:600}
+.qty-ctl{display:flex;align-items:center;gap:4px;flex:none}
+.qty-btn{font:inherit;font-size:22px;line-height:1;width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer}
+.qty-btn:disabled{opacity:.35;cursor:default}
+.qty-n{min-width:2.2em;text-align:center;font-weight:600;font-variant-numeric:tabular-nums;font-size:16px}
+#checklist.checklist{border:0;border-radius:0;overflow:visible}
+#checklist .qty-row{border:1px solid var(--line);border-radius:12px;margin-top:6px}
+#checklist .qty-row:first-child{margin-top:0}
