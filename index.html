@@ -1,113 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://*.supabase.co; img-src 'self' data:; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#ffffff">
 <title>Grey Athlete Kit Log</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap">
-<style>
-/* Layout: mobile-first single column — sticky header with search, people list, fixed Add button, full-screen add/edit sheet. Deliberately white, single theme. */
-:root{
-  color-scheme:light;
-  --bg:#ffffff; --soft:#f5f6f8; --line:#e8eaee; --fg:#111418; --muted:#6b7380;
-  --accent:#111418; --accent-ink:#ffffff; --good:#14804a; --good-soft:#e8f6ee; --danger:#c62828;
-  --f:"Figtree",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  --gutter-l:max(16px,env(safe-area-inset-left,0px));
-  --gutter-r:max(16px,env(safe-area-inset-right,0px));
-}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{background:var(--bg);color:var(--fg);font-family:var(--f);font-size:16px;line-height:1.4}
-body.locked{overflow:hidden}
-.page{max-width:640px;margin:0 auto;padding-bottom:calc(110px + env(safe-area-inset-bottom,0px))}
-.pad{padding-left:var(--gutter-l);padding-right:var(--gutter-r)}
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
 
-body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
-header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:18px 12px;display:grid;gap:12px;border-bottom:1px solid var(--line)}
-.title-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
-h1{font-size:24px;font-weight:700;margin:0;letter-spacing:-.01em}
-.count{color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums}
-input,select,textarea{font:inherit;font-size:16px;color:var(--fg);background:var(--soft);border:1px solid transparent;border-radius:12px;padding:12px 14px;width:100%;min-width:0;appearance:none;-webkit-appearance:none}
-select{background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:34px}
-input:focus,select:focus,textarea:focus{outline:none;border-color:var(--fg);background:var(--bg)}
-button:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
-.filters{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.filters select{padding-block:9px;font-size:15px}
+<!-- Login -->
+<section class="login" id="loginView" hidden>
+  <form class="login-box" id="loginForm" novalidate>
+    <h1>Kit Log</h1>
+    <p class="muted">Enter the staff PIN</p>
+    <input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="current-password" maxlength="12" aria-label="PIN">
+    <button class="primary" id="loginBtn" type="submit">Unlock</button>
+    <p class="msg" id="loginMsg" role="status"></p>
+  </form>
+</section>
 
-.status{font-size:13px;color:var(--muted);padding-block:10px 0}
-.group-head{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-block:18px 6px;display:flex;justify-content:space-between}
-ul{list-style:none;margin:0;padding:0}
-.person{border-bottom:1px solid var(--line)}
-.row{display:flex;align-items:center;gap:12px;width:100%;background:none;border:0;padding:14px 0;text-align:left;color:inherit;font:inherit;cursor:pointer}
-.avatar{flex:none;width:42px;height:42px;border-radius:50%;background:var(--soft);display:grid;place-items:center;font-weight:600;color:var(--muted)}
-.who{flex:1;min-width:0}
-.name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.meta{font-size:14px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.score{flex:none;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;padding:4px 10px;border-radius:999px;background:var(--soft);color:var(--muted)}
-.score.full{background:var(--good-soft);color:var(--good)}
-.detail{padding:0 0 16px 54px;display:grid;gap:12px}
-.ticks{display:flex;flex-wrap:wrap;gap:8px}
-.tick{font:inherit;font-size:14px;border-radius:999px;padding:8px 14px;border:1px solid var(--line);background:var(--bg);color:var(--muted);cursor:pointer}
-.tick.on{background:var(--good-soft);border-color:transparent;color:var(--good);font-weight:600}
-.tick.on::before{content:"✓ "}
-.facts{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:14px;color:var(--muted)}
-.facts b{color:var(--fg);font-weight:500}
-.note{font-size:14px;background:var(--soft);border-radius:10px;padding:10px 12px;white-space:pre-wrap;overflow-wrap:anywhere}
-.actions{display:flex;gap:8px}
-.btn-sm{font:inherit;font-size:14px;font-weight:600;border-radius:10px;padding:9px 16px;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer}
-.btn-sm.danger{color:var(--danger)}
-.empty{text-align:center;color:var(--muted);padding:56px 20px;display:grid;gap:6px}
-.empty b{color:var(--fg);font-size:17px}
-
-.fab-bar{position:fixed;left:0;right:0;bottom:0;z-index:6;padding-top:12px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0px));padding-left:var(--gutter-l);padding-right:var(--gutter-r);background:linear-gradient(to top,var(--bg) 70%,rgba(255,255,255,0))}
-.fab{display:block;width:100%;max-width:608px;margin:0 auto;font:inherit;font-size:17px;font-weight:600;border:0;border-radius:14px;padding:16px;background:var(--accent);color:var(--accent-ink);cursor:pointer;box-shadow:0 6px 20px rgba(17,20,24,.18)}
-.fab:disabled{opacity:.4;cursor:not-allowed}
-
-/* Add / edit sheet */
-.sheet{position:fixed;inset:0;z-index:20;background:rgba(17,20,24,.35);display:flex;align-items:flex-end;justify-content:center}
-.panel{background:var(--bg);width:100%;max-width:640px;height:100%;display:flex;flex-direction:column}
-@media (min-width:700px){.sheet{align-items:center;padding:24px}.panel{height:auto;max-height:92vh;border-radius:18px}}
-.panel-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:calc(12px + env(safe-area-inset-top,0px));padding-bottom:12px;padding-left:var(--gutter-l);padding-right:var(--gutter-r);border-bottom:1px solid var(--line)}
-.panel-head h2{font-size:17px;margin:0;font-weight:700}
-.link{font:inherit;font-size:16px;background:none;border:0;color:var(--muted);padding:6px 4px;cursor:pointer}
-.link.strong{color:var(--fg);font-weight:700}
-.panel-body{overflow-y:auto;padding-block:16px 24px;padding-left:var(--gutter-l);padding-right:var(--gutter-r);display:grid;gap:18px;-webkit-overflow-scrolling:touch}
-.field{display:grid;gap:6px}
-.lbl{font-size:13px;font-weight:600;color:var(--muted)}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.seg{display:flex;flex-wrap:wrap;gap:6px}
-.seg button{font:inherit;font-size:15px;flex:1 0 auto;min-width:52px;border-radius:10px;padding:10px 12px;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer}
-.seg button[aria-pressed="true"]{background:var(--fg);border-color:var(--fg);color:var(--bg);font-weight:600}
-.checklist{border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.check{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;cursor:pointer;border-top:1px solid var(--line);font-size:16px}
-.check:first-child{border-top:0}
-.check input{appearance:none;-webkit-appearance:none;width:26px;height:26px;border-radius:8px;border:2px solid var(--line);background:var(--bg);padding:0;flex:none;display:grid;place-items:center;cursor:pointer}
-.check input:checked{background:var(--good);border-color:var(--good)}
-.check input:checked::after{content:"";width:7px;height:12px;border:solid #fff;border-width:0 2.5px 2.5px 0;transform:translateY(-1px) rotate(45deg)}
-.check input:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
-textarea{min-height:90px;resize:vertical}
-.msg{font-size:14px;color:var(--danger);min-height:1em}
-.toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);font-size:14px;padding:10px 16px;border-radius:999px;z-index:30;max-width:calc(100% - 32px)}
-@media (prefers-reduced-motion:no-preference){.panel{animation:up .22s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}}
-</style>
-
-<div class="page">
-  <header class="pad">
-    <div class="title-row">
-      <h1>Kit Log</h1>
-      <span class="count" id="count"></span>
-    </div>
-    <input id="qSearch" type="search" placeholder="Search name, gym or note" aria-label="Search" autocomplete="off">
-    <div class="filters">
-      <select id="qBatch" aria-label="Filter by batch"><option value="">All batches</option></select>
-      <select id="qGym" aria-label="Filter by gym"><option value="">All gyms</option></select>
-    </div>
-  </header>
-
-  <div class="pad">
-    <div class="status" id="status">Connecting…</div>
-    <div id="list"></div>
+<!-- Setup needed -->
+<section class="login" id="setupView" hidden>
+  <div class="login-box">
+    <h1>Kit Log</h1>
+    <p class="muted">This site isn't connected to its database yet. Fill in <b>config.js</b> with your Supabase project URL and anon key (see README).</p>
   </div>
+</section>
+
+<!-- App -->
+<div id="appView" hidden>
+  <div class="page">
+    <header class="pad">
+      <div class="title-row">
+        <h1>Kit Log</h1>
+        <div class="title-right">
+          <span class="count" id="count"></span>
+          <button class="link" id="lockBtn" type="button">Lock</button>
+        </div>
+      </div>
+      <input id="qSearch" type="search" placeholder="Search name, gym or note" aria-label="Search" autocomplete="off">
+      <div class="filters">
+        <select id="qBatch" aria-label="Filter by batch"><option value="">All batches</option></select>
+        <select id="qGym" aria-label="Filter by gym"><option value="">All gyms</option></select>
+      </div>
+    </header>
+
+    <div class="pad">
+      <div class="status" id="status" hidden></div>
+      <div id="list"></div>
+    </div>
+  </div>
+
+  <div class="fab-bar"><button class="fab" id="addBtn" type="button">+ Add person</button></div>
 </div>
 
-<div class="fab-bar"><button class="fab" id="addBtn" type="button">+ Add person</button></div>
-
+<!-- Add / edit sheet -->
 <div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
   <form class="panel" id="form" novalidate>
     <div class="panel-head">
@@ -134,214 +86,9 @@ textarea{min-height:90px;resize:vertical}
 
 <datalist id="gymList"></datalist>
 <datalist id="batchList"></datalist>
+<div class="toast" id="toast" role="status" hidden></div>
 
-<script>
-(() => {
-  const ITEMS = [["headband","Head band"],["flag","Flag"],["bag","Bag"],["badge","Badge"],["tshirt","T-shirt"]];
-  const LEVELS = ["Beginner","Intermediate","Advanced"];
-  const SIZES = ["XS","S","M","L","XL","XXL","XXXL"];
-  const $ = (id) => document.getElementById(id);
-  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
-  const str = (v, max) => (typeof v === "string" ? v.trim().slice(0, max) : "");
-  const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
-  const fmtDate = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ""); return m ? `${+m[3]}-${+m[2]}-${m[1]}` : ""; };
-
-  let col = null, rows = [], editingId = null, openId = null, armedDelete = false;
-  let level = "", size = "";
-  let last = { batch: "", date: "", gym: "" };   // reused for the next add
-
-  // Segmented pickers
-  function buildSeg(box, values, get, set) {
-    for (const v of values) {
-      const b = el("button", null, v); b.type = "button";
-      b.addEventListener("click", () => { set(get() === v ? "" : v); syncSeg(box, get()); });
-      box.append(b);
-    }
-  }
-  function syncSeg(box, value) { for (const b of box.children) b.setAttribute("aria-pressed", String(b.textContent === value)); }
-  buildSeg($("segLevel"), LEVELS, () => level, (v) => (level = v));
-  buildSeg($("segSize"), SIZES, () => size, (v) => (size = v));
-
-  for (const [k, label] of ITEMS) {
-    const l = el("label", "check");
-    const c = document.createElement("input"); c.type = "checkbox"; c.id = "it_" + k;
-    l.append(el("span", null, label), c);
-    $("checklist").append(l);
-  }
-
-  // Sheet
-  function openSheet(r) {
-    editingId = r ? r.id : null; armedDelete = false;
-    $("sheetTitle").textContent = r ? "Edit person" : "Add person";
-    $("fName").value = r ? r.name : "";
-    $("fGym").value = r ? r.gym : last.gym;
-    $("fBatch").value = r ? r.batch : last.batch;
-    $("fDate").value = r ? r.date || today() : last.date || today();
-    $("fNote").value = r ? r.note : "";
-    level = r ? r.level : ""; size = r ? r.size : "";
-    syncSeg($("segLevel"), level); syncSeg($("segSize"), size);
-    for (const [k] of ITEMS) $("it_" + k).checked = r ? !!r.items[k] : false;
-    $("deleteBtn").hidden = !r; $("deleteBtn").textContent = "Delete person";
-    $("formMsg").textContent = "";
-    $("sheet").hidden = false; document.body.classList.add("locked");
-    if (!r) setTimeout(() => $("fName").focus(), 50);
-  }
-  function closeSheet() { $("sheet").hidden = true; document.body.classList.remove("locked"); editingId = null; }
-
-  $("addBtn").addEventListener("click", () => openSheet(null));
-  $("closeBtn").addEventListener("click", closeSheet);
-  $("sheet").addEventListener("click", (e) => { if (e.target === $("sheet")) closeSheet(); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("sheet").hidden) closeSheet(); });
-
-  function errorText(err) {
-    const c = err && err.code;
-    if (c === "quota_exceeded") return "The list is full. Delete old records to add new ones.";
-    if (c === "not_granted" || c === "revoked") return "You have view-only access, so you can't change the list.";
-    return "Couldn't save. Check your connection and try again.";
-  }
-  let toastTimer;
-  function toast(text) {
-    let t = document.querySelector(".toast"); if (!t) { t = el("div", "toast"); t.setAttribute("role", "status"); document.body.append(t); }
-    t.textContent = text; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 2200);
-  }
-
-  $("form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    if (!col) { $("formMsg").textContent = "The shared list isn't connected, so nothing can be saved."; return; }
-    const items = {}; for (const [k] of ITEMS) items[k] = $("it_" + k).checked;
-    const data = {
-      name: str($("fName").value, 80), gym: str($("fGym").value, 80),
-      level: str(level, 20), size: str(size, 10),
-      batch: str($("fBatch").value, 40).toUpperCase(), date: $("fDate").value || today(),
-      note: str($("fNote").value, 1000), items,
-    };
-    if (!data.name) { $("formMsg").textContent = "Enter a name."; $("fName").focus(); return; }
-    const btn = $("saveBtn"); btn.disabled = true;
-    try {
-      if (editingId) { await col.doc(editingId).update({ ...data, updatedAt: Date.now() }); toast("Saved " + data.name); }
-      else { await col.add({ ...data, createdAt: Date.now() }); toast("Added " + data.name); }
-      last = { batch: data.batch, date: data.date, gym: data.gym };
-      closeSheet();
-    } catch (err) { $("formMsg").textContent = errorText(err); }
-    finally { btn.disabled = false; }
-  });
-
-  $("deleteBtn").addEventListener("click", async () => {
-    if (!armedDelete) { armedDelete = true; $("deleteBtn").textContent = "Tap again to delete"; return; }
-    const id = editingId;
-    try { await col.doc(id).delete(); if (openId === id) openId = null; closeSheet(); toast("Deleted"); }
-    catch (err) { $("formMsg").textContent = errorText(err); }
-  });
-
-  async function toggleItem(r, k) {
-    try { await col.doc(r.id).update({ items: { ...r.items, [k]: !r.items[k] }, updatedAt: Date.now() }); }
-    catch (err) { toast(errorText(err)); }
-  }
-
-  function clean(snap) {
-    const d = snap.data() || {};
-    const items = {}; for (const [k] of ITEMS) items[k] = !!(d.items && d.items[k] === true);
-    return {
-      id: snap.id, items,
-      name: str(d.name, 80) || "Unnamed", gym: str(d.gym, 80), level: str(d.level, 20), size: str(d.size, 10),
-      batch: str(d.batch, 40), date: str(d.date, 10), note: str(d.note, 1000),
-      createdAt: typeof d.createdAt === "number" ? d.createdAt : 0,
-    };
-  }
-  function fillSelect(sel, values, allLabel) {
-    const cur = sel.value; sel.replaceChildren(new Option(allLabel, ""));
-    for (const v of values) sel.append(new Option(v, v));
-    sel.value = values.includes(cur) ? cur : "";
-  }
-
-  function render() {
-    const gyms = [...new Set(rows.map((r) => r.gym).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-    const batches = [...new Set(rows.map((r) => r.batch).filter(Boolean))].sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
-    fillSelect($("qGym"), gyms, "All gyms"); fillSelect($("qBatch"), batches, "All batches");
-    $("gymList").replaceChildren(...gyms.map((v) => new Option(v)));
-    $("batchList").replaceChildren(...batches.map((v) => new Option(v)));
-
-    const q = $("qSearch").value.trim().toLowerCase(), g = $("qGym").value, b = $("qBatch").value;
-    const shown = rows.filter((r) => (!g || r.gym === g) && (!b || r.batch === b) &&
-      (!q || (r.name + " " + r.gym + " " + r.note).toLowerCase().includes(q)));
-    $("count").textContent = rows.length ? `${shown.length} of ${rows.length}` : "";
-
-    const list = $("list"); list.replaceChildren();
-    if (!rows.length) {
-      const e = el("div", "empty"); e.append(el("b", null, "No one added yet"), el("span", null, "Tap Add person to log who got which items."));
-      list.append(e); return;
-    }
-    if (!shown.length) { const e = el("div", "empty"); e.append(el("b", null, "No matches"), el("span", null, "Try a different search or filter.")); list.append(e); return; }
-
-    const groups = new Map();
-    for (const r of shown) { const k = r.batch; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); }
-    const keys = [...groups.keys()].sort((a, b) => (a === "") - (b === "") || b.localeCompare(a, undefined, { numeric: true }));
-    for (const k of keys) {
-      const people = groups.get(k).sort((a, b) => b.createdAt - a.createdAt);
-      const head = el("div", "group-head");
-      head.append(el("span", null, k || "No batch"), el("span", null, people.length + (people.length === 1 ? " person" : " people")));
-      const ul = el("ul");
-      for (const r of people) ul.append(personRow(r));
-      list.append(head, ul);
-    }
-  }
-
-  function personRow(r) {
-    const li = el("li", "person");
-    const given = ITEMS.filter(([k]) => r.items[k]).length;
-    const row = el("button", "row"); row.type = "button"; row.setAttribute("aria-expanded", String(openId === r.id));
-    const initials = r.name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-    const who = el("div", "who");
-    who.append(el("div", "name", r.name), el("div", "meta", [r.gym, r.size].filter(Boolean).join(" · ") || "—"));
-    row.append(el("div", "avatar", initials || "?"), who, el("span", "score" + (given === ITEMS.length ? " full" : ""), `${given}/${ITEMS.length}`));
-    row.addEventListener("click", () => { openId = openId === r.id ? null : r.id; render(); });
-    li.append(row);
-
-    if (openId === r.id) {
-      const d = el("div", "detail");
-      const ticks = el("div", "ticks");
-      for (const [k, label] of ITEMS) {
-        const t = el("button", "tick" + (r.items[k] ? " on" : ""), label); t.type = "button";
-        t.setAttribute("aria-pressed", String(r.items[k]));
-        t.addEventListener("click", () => toggleItem(r, k));
-        ticks.append(t);
-      }
-      const facts = el("div", "facts");
-      const fact = (label, v) => { if (!v) return; const s = el("span", null, label + " "); s.append(el("b", null, v)); facts.append(s); };
-      fact("Level", r.level); fact("Size", r.size); fact("Date", fmtDate(r.date));
-      d.append(ticks);
-      if (facts.childElementCount) d.append(facts);
-      if (r.note) d.append(el("div", "note", r.note));
-      const act = el("div", "actions");
-      const edit = el("button", "btn-sm", "Edit"); edit.type = "button"; edit.addEventListener("click", () => openSheet(r));
-      act.append(edit); d.append(act);
-      li.append(d);
-    }
-    return li;
-  }
-
-  for (const id of ["qSearch", "qGym", "qBatch"]) $(id).addEventListener("input", render);
-  render();
-  $("status").textContent = "Connecting…";
-
-  (async () => {
-    let db = null;
-    try { db = window.claude ? await window.claude.use("db") : null; } catch { db = null; }
-    if (!db) {
-      $("status").textContent = "Open this page signed in to claude.ai to see the shared list.";
-      $("addBtn").disabled = true; return;
-    }
-    col = db.collection("handouts");
-    col.onSnapshot((snap) => {
-      rows = snap.docs.map(clean);
-      if (openId && !rows.some((r) => r.id === openId)) openId = null;
-      $("status").textContent = "";
-      $("status").hidden = true;
-      render();
-    }, (err) => {
-      $("status").hidden = false;
-      $("status").textContent = err && err.code === "revoked" ? "Access to the list was removed." : "Lost connection. Reload the page.";
-    });
-  })();
-})();
-</script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
