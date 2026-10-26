@@ -1,0 +1,356 @@
+<title>Grey Athlete Kit Log</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one column — issue form on top, filter bar, then a list of handout cards grouped by batch */
+:root{
+  --bg:#eef0f2; --surface:#ffffff; --line:#d5d9de; --fg:#1b2026; --muted:#5d6670;
+  --accent:#1f4fd1; --accent-ink:#ffffff; --good:#17804a; --good-bg:#e3f3ea; --danger:#b42323;
+  --off:#f3f4f6;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12161b; --surface:#1b2128; --line:#2f3741; --fg:#e7eaee; --muted:#9aa4af;
+  --accent:#6f95ff; --accent-ink:#0d1220; --good:#55c98a; --good-bg:#183428; --danger:#ff7b7b; --off:#232a32; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12161b; --surface:#1b2128; --line:#2f3741; --fg:#e7eaee; --muted:#9aa4af;
+  --accent:#6f95ff; --accent-ink:#0d1220; --good:#55c98a; --good-bg:#183428; --danger:#ff7b7b; --off:#232a32; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.45}
+.wrap{max-width:980px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:20px}
+h1{font-family:var(--f-display);font-weight:700;font-size:34px;letter-spacing:.01em;margin:0;text-transform:uppercase;line-height:1}
+h2{font-family:var(--f-display);font-weight:600;font-size:20px;text-transform:uppercase;letter-spacing:.04em;margin:0}
+.top{display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap}
+.sub{color:var(--muted);margin:4px 0 0}
+.status{font-size:13px;color:var(--muted)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+label.f{display:grid;gap:4px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);min-width:0}
+input,select,textarea{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:9px 10px;width:100%;min-width:0}
+textarea{resize:vertical;min-height:70px}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,.chip:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.items{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:7px 12px;cursor:pointer;user-select:none;background:var(--off);font-size:14px}
+.chip input{width:auto;margin:0;accent-color:var(--good)}
+.chip:has(input:checked){background:var(--good-bg);border-color:var(--good);color:var(--fg)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+button{font:inherit;cursor:pointer;border-radius:6px;padding:10px 18px;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-family:var(--f-display);font-size:20px;letter-spacing:.06em;text-transform:uppercase;padding:8px 28px}
+button.ghost{border-color:transparent;background:transparent;color:var(--muted);padding:6px 10px;font-size:13px}
+button.danger{color:var(--danger)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.msg{font-size:13px;color:var(--danger)}
+.msg.ok{color:var(--good)}
+.filters{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}
+@media (max-width:560px){.filters{grid-template-columns:1fr 1fr}.filters .search{grid-column:1/-1}}
+.totals{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted)}
+.totals b{color:var(--fg);font-variant-numeric:tabular-nums}
+.batch{display:grid;gap:10px}
+.batch-head{display:flex;align-items:baseline;gap:10px;border-bottom:1px solid var(--line);padding-bottom:6px}
+.code{font-family:var(--f-mono);font-size:13px;background:var(--off);border:1px solid var(--line);border-radius:4px;padding:1px 6px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;gap:10px;min-width:0}
+.card .who{display:flex;justify-content:space-between;gap:8px;align-items:start}
+.card .name{font-weight:600;font-size:16px;overflow-wrap:anywhere}
+.card .meta{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.card .date{font-family:var(--f-mono);font-size:12px;color:var(--muted);white-space:nowrap}
+.checks{display:flex;flex-wrap:wrap;gap:6px}
+.tick{font-size:13px;border-radius:999px;padding:3px 10px;border:1px solid var(--line);background:var(--off);color:var(--muted);cursor:pointer}
+.tick.on{background:var(--good-bg);border-color:var(--good);color:var(--fg)}
+.tick.on::before{content:"✓ ";color:var(--good);font-weight:700}
+.note{font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere;border-left:2px solid var(--line);padding-left:8px}
+.actions{display:flex;gap:4px;justify-content:flex-end}
+.empty{color:var(--muted);text-align:center;padding:28px 12px;border:1px dashed var(--line);border-radius:10px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Grey Athlete Kit Log</h1>
+      <p class="sub">Who got what, from which gym, in which batch.</p>
+    </div>
+    <span class="status" id="status">Connecting…</span>
+  </header>
+
+  <form class="panel" id="form" novalidate>
+    <div class="row" style="justify-content:space-between">
+      <h2 id="formTitle">Add athlete</h2>
+      <button type="button" class="ghost" id="cancelEdit" hidden>Cancel edit</button>
+    </div>
+    <div class="grid">
+      <label class="f">Name<input id="fName" required autocomplete="off" maxlength="80"></label>
+      <label class="f">Gym<input id="fGym" list="gymList" autocomplete="off" maxlength="80"></label>
+      <label class="f">Level
+        <select id="fLevel">
+          <option value="">Choose…</option>
+          <option>Beginner</option><option>Intermediate</option><option>Advanced</option>
+        </select>
+      </label>
+      <label class="f">T-shirt size
+        <select id="fSize">
+          <option value="">Choose…</option>
+          <option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option><option>XXXL</option>
+        </select>
+      </label>
+      <label class="f">Batch<input id="fBatch" list="batchList" placeholder="T-100" autocomplete="off" maxlength="40"></label>
+      <label class="f">Date<input id="fDate" type="date"></label>
+    </div>
+    <div class="f" style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Items given</div>
+    <div class="items" id="itemBoxes"></div>
+    <label class="f">Note<textarea id="fNote" maxlength="1000" placeholder="Anything to remember (missing size, to collect later…)"></textarea></label>
+    <div class="row">
+      <button type="submit" class="primary" id="submitBtn">Add</button>
+      <span class="msg" id="formMsg" role="status"></span>
+    </div>
+  </form>
+
+  <section class="panel">
+    <div class="row" style="justify-content:space-between">
+      <h2>Handouts</h2>
+      <div class="totals" id="totals"></div>
+    </div>
+    <div class="filters">
+      <input class="search" id="qSearch" type="search" placeholder="Search name, gym or note" aria-label="Search">
+      <select id="qGym" aria-label="Filter by gym"><option value="">All gyms</option></select>
+      <select id="qBatch" aria-label="Filter by batch"><option value="">All batches</option></select>
+    </div>
+    <div id="list"><div class="empty">Loading the shared list…</div></div>
+  </section>
+
+  <datalist id="gymList"></datalist>
+  <datalist id="batchList"></datalist>
+</div>
+
+<script>
+(() => {
+  const ITEMS = [
+    ["headband", "Head band"],
+    ["flag", "Flag"],
+    ["bag", "Bag"],
+    ["badge", "Badge"],
+    ["tshirt", "T-shirt"],
+  ];
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+
+  let db = null, col = null, rows = [], editingId = null, armedDelete = null;
+
+  // Item checkboxes in the form
+  for (const [key, label] of ITEMS) {
+    const l = el("label", "chip");
+    const c = document.createElement("input");
+    c.type = "checkbox"; c.id = "it_" + key; c.value = key;
+    l.append(c, document.createTextNode(label));
+    $("itemBoxes").append(l);
+  }
+
+  const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
+  const fmtDate = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ""); return m ? `${+m[3]}-${+m[2]}-${m[1]}` : ""; };
+  const str = (v, max) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+
+  function resetForm() {
+    $("form").reset();
+    $("fDate").value = today();
+    editingId = null;
+    $("formTitle").textContent = "Add athlete";
+    $("submitBtn").textContent = "Add";
+    $("cancelEdit").hidden = true;
+  }
+  resetForm();
+
+  function readForm() {
+    const items = {};
+    for (const [k] of ITEMS) items[k] = $("it_" + k).checked;
+    return {
+      name: str($("fName").value, 80),
+      gym: str($("fGym").value, 80),
+      level: str($("fLevel").value, 20),
+      size: str($("fSize").value, 10),
+      batch: str($("fBatch").value, 40).toUpperCase(),
+      date: $("fDate").value || today(),
+      note: str($("fNote").value, 1000),
+      items,
+    };
+  }
+
+  function setMsg(text, ok) { const m = $("formMsg"); m.textContent = text; m.classList.toggle("ok", !!ok); }
+
+  $("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!col) { setMsg("The shared list isn't connected, so nothing can be saved right now."); return; }
+    const data = readForm();
+    if (!data.name) { setMsg("Enter a name first."); $("fName").focus(); return; }
+    const btn = $("submitBtn"); btn.disabled = true;
+    try {
+      if (editingId) {
+        await col.doc(editingId).update({ ...data, updatedAt: Date.now() });
+        setMsg("Saved changes for " + data.name + ".", true);
+      } else {
+        await col.add({ ...data, createdAt: Date.now() });
+        setMsg("Added " + data.name + ".", true);
+      }
+      const keepBatch = data.batch, keepDate = data.date, keepGym = data.gym;
+      resetForm();
+      // Handing out a batch usually means many people in a row: keep batch, date and gym.
+      $("fBatch").value = keepBatch; $("fDate").value = keepDate; $("fGym").value = keepGym;
+      $("fName").focus();
+    } catch (err) {
+      setMsg(errorText(err));
+    } finally { btn.disabled = false; }
+  });
+
+  $("cancelEdit").addEventListener("click", () => { resetForm(); setMsg(""); });
+
+  function errorText(err) {
+    const c = err && err.code;
+    if (c === "quota_exceeded") return "The list is full. Delete old records to add new ones.";
+    if (c === "not_granted" || c === "revoked") return "You have view-only access, so you can't change the list.";
+    return "Couldn't save. Check your connection and try again.";
+  }
+
+  function startEdit(r) {
+    editingId = r.id;
+    $("fName").value = r.name; $("fGym").value = r.gym; $("fLevel").value = r.level;
+    $("fSize").value = r.size; $("fBatch").value = r.batch; $("fDate").value = r.date; $("fNote").value = r.note;
+    for (const [k] of ITEMS) $("it_" + k).checked = !!r.items[k];
+    $("formTitle").textContent = "Edit " + r.name;
+    $("submitBtn").textContent = "Save";
+    $("cancelEdit").hidden = false;
+    setMsg("");
+    $("form").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  }
+
+  async function toggleItem(r, key) {
+    try { await col.doc(r.id).update({ items: { ...r.items, [key]: !r.items[key] }, updatedAt: Date.now() }); }
+    catch (err) { $("status").textContent = errorText(err); }
+  }
+
+  async function remove(r) {
+    try { await col.doc(r.id).delete(); if (editingId === r.id) resetForm(); }
+    catch (err) { $("status").textContent = errorText(err); }
+  }
+
+  function clean(snap) {
+    const d = snap.data() || {};
+    const items = {};
+    for (const [k] of ITEMS) items[k] = !!(d.items && d.items[k] === true);
+    return {
+      id: snap.id, items,
+      name: str(d.name, 80) || "Unnamed", gym: str(d.gym, 80), level: str(d.level, 20), size: str(d.size, 10),
+      batch: str(d.batch, 40), date: str(d.date, 10), note: str(d.note, 1000),
+      createdAt: typeof d.createdAt === "number" ? d.createdAt : 0,
+    };
+  }
+
+  function fillSelect(sel, values, allLabel) {
+    const cur = sel.value;
+    sel.replaceChildren(new Option(allLabel, ""));
+    for (const v of values) sel.append(new Option(v, v));
+    sel.value = values.includes(cur) ? cur : "";
+  }
+  function fillDatalist(dl, values) { dl.replaceChildren(...values.map((v) => new Option(v))); }
+
+  function render() {
+    const gyms = [...new Set(rows.map((r) => r.gym).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const batches = [...new Set(rows.map((r) => r.batch).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    fillSelect($("qGym"), gyms, "All gyms");
+    fillSelect($("qBatch"), batches, "All batches");
+    fillDatalist($("gymList"), gyms);
+    fillDatalist($("batchList"), batches);
+
+    const q = $("qSearch").value.trim().toLowerCase();
+    const g = $("qGym").value, b = $("qBatch").value;
+    const shown = rows.filter((r) =>
+      (!g || r.gym === g) && (!b || r.batch === b) &&
+      (!q || (r.name + " " + r.gym + " " + r.note).toLowerCase().includes(q)));
+
+    // Totals for what's on screen
+    const t = $("totals"); t.replaceChildren();
+    const add = (label, n) => { const s = el("span"); s.append(el("b", null, String(n)), document.createTextNode(" " + label)); t.append(s); };
+    add(shown.length === 1 ? "person" : "people", shown.length);
+    for (const [k, label] of ITEMS) add(label, shown.filter((r) => r.items[k]).length);
+
+    const list = $("list"); list.replaceChildren();
+    if (!rows.length) {
+      list.append(el("div", "empty", "No handouts yet. Fill in the form above and tap Add to log the first athlete."));
+      return;
+    }
+    if (!shown.length) { list.append(el("div", "empty", "Nobody matches these filters.")); return; }
+
+    // Group by batch, newest batch first; within a batch, newest entry first
+    const groups = new Map();
+    for (const r of shown) { const k = r.batch || ""; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); }
+    const keys = [...groups.keys()].sort((a, b) => (a === "") - (b === "") || b.localeCompare(a, undefined, { numeric: true }));
+    const wrap = el("div"); wrap.style.cssText = "display:grid;gap:22px";
+    for (const k of keys) {
+      const sec = el("div", "batch");
+      const head = el("div", "batch-head");
+      head.append(k ? el("span", "code", k) : el("span", "meta", "No batch"),
+                  el("span", "status", groups.get(k).length + (groups.get(k).length === 1 ? " person" : " people")));
+      const cards = el("div", "cards");
+      for (const r of groups.get(k).sort((a, b) => b.createdAt - a.createdAt)) cards.append(card(r));
+      sec.append(head, cards);
+      wrap.append(sec);
+    }
+    list.append(wrap);
+  }
+
+  function card(r) {
+    const c = el("article", "card");
+    const who = el("div", "who");
+    const left = el("div"); left.style.minWidth = "0";
+    left.append(el("div", "name", r.name));
+    const meta = [r.gym, r.level, r.size && "Size " + r.size].filter(Boolean).join(" · ");
+    if (meta) left.append(el("div", "meta", meta));
+    who.append(left, el("span", "date", fmtDate(r.date)));
+    c.append(who);
+
+    const checks = el("div", "checks");
+    for (const [k, label] of ITEMS) {
+      const btn = el("button", "tick" + (r.items[k] ? " on" : ""), label);
+      btn.type = "button";
+      btn.setAttribute("aria-pressed", String(r.items[k]));
+      btn.title = r.items[k] ? "Given — tap to unmark" : "Not given — tap to mark as given";
+      btn.addEventListener("click", () => toggleItem(r, k));
+      checks.append(btn);
+    }
+    c.append(checks);
+    if (r.note) c.append(el("div", "note", r.note));
+
+    const act = el("div", "actions");
+    const edit = el("button", "ghost", "Edit"); edit.type = "button"; edit.addEventListener("click", () => startEdit(r));
+    const del = el("button", "ghost danger", armedDelete === r.id ? "Tap again to delete" : "Delete"); del.type = "button";
+    del.addEventListener("click", () => {
+      if (armedDelete === r.id) { armedDelete = null; remove(r); }
+      else { armedDelete = r.id; render(); setTimeout(() => { if (armedDelete === r.id) { armedDelete = null; render(); } }, 4000); }
+    });
+    act.append(edit, del);
+    c.append(act);
+    return c;
+  }
+
+  for (const id of ["qSearch", "qGym", "qBatch"]) $(id).addEventListener("input", render);
+
+  (async () => {
+    try { db = window.claude ? await window.claude.use("db") : null; } catch { db = null; }
+    if (!db) {
+      $("status").textContent = "Offline: open this page signed in to claude.ai to use the shared list.";
+      $("list").replaceChildren(el("div", "empty", "The shared list isn't available in this view."));
+      $("submitBtn").disabled = true;
+      return;
+    }
+    col = db.collection("handouts");
+    col.onSnapshot((snap) => {
+      rows = snap.docs.map(clean);
+      $("status").textContent = "Live · shared with your team";
+      render();
+    }, (err) => {
+      $("status").textContent = err && err.code === "revoked" ? "Access to the list was removed." : "Lost connection to the list. Reload the page.";
+    });
+  })();
+})();
+</script>
