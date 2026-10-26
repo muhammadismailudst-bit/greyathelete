@@ -484,7 +484,7 @@
       list.append(ban);
     }
     if (!people.length) {
-      const e = el("div", "empty"); e.append(el("b", null, "No one added yet"), el("span", null, "Tap Add person to start. Set up races and items under Races & items."));
+      const e = el("div", "empty"); e.append(el("b", null, "No one added yet"), el("span", null, "Tap + Add to add someone, or use ⋯ → Bulk add for a list."));
       list.append(e); return;
     }
     if (!shown.length) { const e = el("div", "empty"); e.append(el("b", null, "No matches"), el("span", null, "Try a different search or filter.")); list.append(e); return; }
@@ -546,6 +546,13 @@
   }
 
   for (const id of ["qSearch", "qGym", "qRace"]) $(id).addEventListener("input", render);
+
+  // ---------- Header menu ----------
+  function setMenu(open) { $("menu").hidden = !open; $("menuBtn").setAttribute("aria-expanded", String(open)); }
+  $("menuBtn").addEventListener("click", (e) => { e.stopPropagation(); setMenu($("menu").hidden); });
+  $("menu").addEventListener("click", () => setMenu(false));
+  document.addEventListener("click", (e) => { if (!$("menu").hidden && !e.target.closest(".menu-wrap")) setMenu(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") setMenu(false); });
 
   // ---------- Start ----------
   if (!configured) show("setup");

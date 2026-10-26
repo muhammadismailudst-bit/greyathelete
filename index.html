@@ -37,11 +37,20 @@
   <div class="page">
     <header class="pad">
       <div class="title-row">
-        <h1>Kit Log</h1>
-        <div class="title-right">
+        <div class="title-left">
+          <h1>Kit Log</h1>
           <span class="count" id="count"></span>
-          <button class="link strong-sm" id="manageBtn" type="button">Races &amp; items</button>
-          <button class="link" id="lockBtn" type="button">Lock</button>
+        </div>
+        <div class="title-right">
+          <div class="menu-wrap">
+            <button class="icon-btn" id="menuBtn" type="button" aria-label="More" aria-haspopup="true" aria-expanded="false">⋯</button>
+            <div class="menu" id="menu" role="menu" hidden>
+              <button type="button" role="menuitem" id="bulkBtn">Bulk add</button>
+              <button type="button" role="menuitem" id="manageBtn">Races &amp; items</button>
+              <button type="button" role="menuitem" id="lockBtn">Lock</button>
+            </div>
+          </div>
+          <button class="add-btn" id="addBtn" type="button">+ Add</button>
         </div>
       </div>
       <input id="qSearch" type="search" placeholder="Search name, gym or note" aria-label="Search" autocomplete="off">
@@ -57,7 +66,6 @@
     </div>
   </div>
 
-  <div class="fab-bar"><div class="fab-row"><button class="fab" id="addBtn" type="button">+ Add person</button><button class="fab ghost" id="bulkBtn" type="button">Bulk add</button></div></div>
 </div>
 
 <!-- Add / edit sheet -->
