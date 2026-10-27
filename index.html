@@ -14,15 +14,27 @@
 </head>
 <body>
 
-<!-- Login -->
+<!-- Sign in -->
 <section class="login" id="loginView" hidden>
-  <form class="login-box" id="loginForm" novalidate>
+  <div class="login-box">
     <h1 class="logo-h"><img class="logo login-logo" src="assets/logo.png" alt="Grey Athletes"></h1>
-    <p class="muted">Enter the staff PIN</p>
-    <input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="current-password" maxlength="12" aria-label="PIN">
-    <button class="primary" id="loginBtn" type="submit">Unlock</button>
+    <p class="muted">Sign in with the Google account your admin added.</p>
+    <button class="google-btn" id="signInBtn" type="button">
+      <svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.2 1.5-5 2.3-8.2 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>
+      Sign in with Google
+    </button>
     <p class="msg" id="loginMsg" role="status"></p>
-  </form>
+  </div>
+</section>
+
+<!-- Signed in, but not on the team -->
+<section class="login" id="noAccessView" hidden>
+  <div class="login-box">
+    <h1 class="logo-h"><img class="logo login-logo" src="assets/logo.png" alt="Grey Athletes"></h1>
+    <p><b>No access yet</b></p>
+    <p class="muted">You're signed in as <b id="noAccessEmail"></b>, but this account isn't on the team. Ask an admin to add it, then sign in again.</p>
+    <button class="primary" id="noAccessSignOut" type="button">Use a different account</button>
+  </div>
 </section>
 
 <!-- Setup needed -->
@@ -45,16 +57,18 @@
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
             </button>
             <div class="menu" id="menu" role="menu" hidden>
+              <div class="menu-who" id="whoami"></div>
               <button type="button" role="menuitem" id="pdfBtn">Export PDF</button>
-              <button type="button" role="menuitem" id="bulkBtn">Bulk add</button>
-              <button type="button" role="menuitem" id="manageBtn">Edit lists</button>
-              <button type="button" role="menuitem" id="lockBtn">Lock</button>
+              <button type="button" role="menuitem" id="bulkBtn" class="admin-only">Bulk add</button>
+              <button type="button" role="menuitem" id="manageBtn" class="admin-only">Edit lists</button>
+              <button type="button" role="menuitem" id="teamBtn" class="admin-only">Team &amp; access</button>
+              <button type="button" role="menuitem" id="lockBtn">Sign out</button>
             </div>
           </div>
-          <button class="add-btn" id="addBtn" type="button"><span aria-hidden="true">+</span> Add</button>
+          <button class="add-btn admin-only" id="addBtn" type="button"><span aria-hidden="true">+</span> Add</button>
         </div>
       </div>
-      <div class="tabs" role="tablist" aria-label="Sections">
+      <div class="tabs admin-only" role="tablist" aria-label="Sections">
         <button type="button" role="tab" id="tabAthletes" aria-selected="true" aria-controls="athletesView">Athletes</button>
         <button type="button" role="tab" id="tabEvents" aria-selected="false" aria-controls="eventsView">Events</button>
       </div>
@@ -214,6 +228,30 @@ Omar Y, Iron Gym, Fan, L, , T-shirt, size to confirm</pre>
         <ul class="manage-list" id="itemList"></ul>
       </section>
       <p class="msg" id="manageMsg" role="status"></p>
+    </div>
+  </div>
+</div>
+
+<!-- Team & access (admins) -->
+<div class="sheet" id="team" hidden role="dialog" aria-modal="true" aria-labelledby="teamTitle">
+  <div class="panel">
+    <div class="panel-head">
+      <span class="head-spacer"></span>
+      <h2 id="teamTitle">Team &amp; access</h2>
+      <button type="button" class="link strong" id="teamClose">Done</button>
+    </div>
+    <div class="panel-body">
+      <div class="help">
+        <p><b>Admin</b>: everything. <b>Viewer</b>: sees the Events tab only, can't change anything.</p>
+        <p>Add their Google (Gmail) address. They sign in with the same account.</p>
+      </div>
+      <form class="team-add" id="teamAdd" novalidate>
+        <input id="newMember" type="email" inputmode="email" autocomplete="off" maxlength="200" placeholder="name@gmail.com" aria-label="Google email">
+        <select id="newRole" aria-label="Role"><option value="viewer">Viewer</option><option value="admin">Admin</option></select>
+        <button class="btn-sm dark" type="submit">Add</button>
+      </form>
+      <ul class="manage-list" id="teamList"></ul>
+      <p class="msg" id="teamMsg" role="status"></p>
     </div>
   </div>
 </div>
