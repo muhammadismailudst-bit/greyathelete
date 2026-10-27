@@ -41,7 +41,7 @@ Limits to know: everyone shares one PIN, so the app can't tell who changed what.
 Tap **Bulk add** and paste one person per line (commas, or rows copied from Excel / Google Sheets):
 
 ```
-Name, Gym, Level, Size, Races, Items, Note
-Ali Khan, Iron Gym, Beginner, M, Hyrox Dubai; T-100, Bag; T-shirt, paid
+Name, Gym, Category, Size, Races, Items, Note
+Ali Khan, Iron Gym, Qatari; Rx, M, Hyrox Dubai; T-100, Bag; T-shirt x2, paid
 ```
-Only Name is required. Separate several races or items with `;`. New race or item names are created. A header row and people already in the list (same name and gym) are skipped. Up to 500 at a time.
+Only Name is required. Category: Qatari, Rx, Girls, Master, Fan, Bartender. Separate several races or items with `;`. New race or item names are created. A header row and people already in the list (same name and gym) are skipped. Up to 500 at a time.

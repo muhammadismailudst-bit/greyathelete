@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const LEVELS = ["Beginner", "Intermediate", "Advanced"];
+  const CATEGORIES = ["Qatari", "Rx", "Girls", "Master", "Fan", "Bartender"];
   const SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
   const TOKEN_KEY = "kitlog.token";
   const REFRESH_MS = 30000;
@@ -60,7 +60,7 @@
   // ---------- State ----------
   let people = [], races = [], items = [];
   let editingId = null, openId = null, armedDelete = null;
-  let level = "", size = "";
+  let size = "", formCats = new Set(), formRaces = new Set();
   let last = { date: "", gym: "", races: [] };
   let manageEditing = null;                 // "race:<id>" | "item:<id>"
   let loadSeq = 0, timer = null;
@@ -123,7 +123,7 @@
     return {
       id: String(d.id), items: its,
       races: Array.isArray(d.races) ? d.races.map(String) : [],
-      name: str(d.name, 80) || "Unnamed", gym: str(d.gym, 80), level: str(d.level, 20), size: str(d.size, 10),
+      name: str(d.name, 80) || "Unnamed", gym: str(d.gym, 80), categories: Array.isArray(d.categories) ? d.categories.filter((c) => CATEGORIES.includes(c)) : [], size: str(d.size, 10),
       date: str(d.date, 10), note: str(d.note, 1000), createdAt: Date.parse(d.created_at) || 0,
     };
   }
@@ -159,21 +159,54 @@
     for (const v of values) box.append(btn(null, v, () => { set(get() === v ? "" : v); syncSeg(box, get()); }));
   }
   function syncSeg(box, value) { for (const b of box.children) b.setAttribute("aria-pressed", String(b.textContent === value)); }
-  buildSeg($("segLevel"), LEVELS, () => level, (v) => (level = v));
   buildSeg($("segSize"), SIZES, () => size, (v) => (size = v));
 
-  function fillChecklist(box, list, checked, prefix, emptyText) {
-    box.replaceChildren();
-    if (!list.length) { const l = el("div", "check muted", emptyText); box.append(l); return; }
-    for (const x of list) {
-      const l = el("label", "check");
-      const c = document.createElement("input"); c.type = "checkbox"; c.id = prefix + x.id; c.value = x.id; c.checked = checked.has(x.id);
-      const name = el("span", null, x.name);
-      if (x.date) { name.append(el("span", "m-sub", "  " + fmtDate(x.date))); }
-      l.append(name, c); box.append(l);
-    }
+  // A full-width row with a tick box on the right.
+  function checkRow(label, on, onChange, sub) {
+    const row = el("label", "check-row" + (on ? " on" : ""));
+    const name = el("span", "qty-name", label);
+    if (sub) name.append(el("span", "m-sub", "  " + sub));
+    const c = document.createElement("input"); c.type = "checkbox"; c.checked = on;
+    c.addEventListener("change", () => onChange(c.checked));
+    row.append(name, c);
+    return row;
   }
-  const checkedIn = (box) => [...box.querySelectorAll("input[type=checkbox]:checked")].map((c) => c.value);
+
+  // Type a new race and add it on the spot; onAdded gets the new race id.
+  function addRaceRow(onAdded) {
+    const f = el("div", "add-inline");
+    const i = document.createElement("input"); i.maxLength = 60; i.placeholder = "Add a race…"; i.autocomplete = "off"; i.setAttribute("aria-label", "New race name");
+    i.enterKeyHint = "done";
+    const b = btn("btn-sm dark", "Add");
+    f.append(i, b);
+    i.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); b.click(); } });
+    i.addEventListener("blur", () => { if (pendingRender) setTimeout(render, 0); });
+    b.addEventListener("mousedown", (e) => e.preventDefault());   // keep focus so a refresh can't wipe the text
+    b.addEventListener("click", async () => {
+      const name = str(i.value, 60); if (!name) { i.focus(); return; }
+      const found = races.find((r) => r.name.toLowerCase() === name.toLowerCase());
+      b.disabled = true;
+      try {
+        const id = found ? found.id : String(await call("save_race", { p_id: null, p_name: name, p_date: null, p_note: "" }));
+        if (!found) races = [{ id, name, date: "", note: "" }, ...races];
+        i.value = ""; i.blur();
+        await onAdded(id);
+        toast(found ? "Ticked " + found.name : "Added " + name);
+      } catch (err) { if (err.code !== "locked") toast(errorText(err)); b.disabled = false; }
+    });
+    return f;
+  }
+
+
+  function renderFormCats() {
+    const box = $("catChecklist"); box.replaceChildren();
+    for (const c of CATEGORIES) box.append(checkRow(c, formCats.has(c), (on) => { on ? formCats.add(c) : formCats.delete(c); renderFormCats(); }));
+  }
+  function renderFormRaces() {
+    const box = $("raceChecklist"); box.replaceChildren();
+    for (const r of races) box.append(checkRow(r.name, formRaces.has(r.id), (on) => { on ? formRaces.add(r.id) : formRaces.delete(r.id); renderFormRaces(); }, fmtDate(r.date)));
+    box.append(addRaceRow(async (id) => { formRaces.add(id); renderFormRaces(); }));
+  }
 
   let formQty = {};
   function renderFormItems() {
@@ -189,11 +222,12 @@
     $("fGym").value = p ? p.gym : last.gym;
     $("fDate").value = p ? (p.date || "") : (last.date || today());
     $("fNote").value = p ? p.note : "";
-    level = p ? p.level : ""; size = p ? p.size : "";
-    syncSeg($("segLevel"), level); syncSeg($("segSize"), size);
+    size = p ? p.size : ""; syncSeg($("segSize"), size);
+    formCats = new Set(p ? p.categories : []);
+    renderFormCats();
     const presetRace = $("qRace").value;
-    const raceSet = new Set(p ? p.races : (presetRace ? [presetRace] : last.races));
-    fillChecklist($("raceChecklist"), races, raceSet, "race_", "No races yet. Add them under ⋯ → Races & items.");
+    formRaces = new Set(p ? p.races : (presetRace ? [presetRace] : last.races));
+    renderFormRaces();
     formQty = p ? { ...p.items } : {};
     renderFormItems();
     $("deleteBtn").hidden = !p; $("deleteBtn").textContent = "Delete person"; armedDelete = null;
@@ -217,9 +251,9 @@
     const its = {}; for (const it of items) if (formQty[it.id] > 0) its[it.id] = formQty[it.id];
     const data = {
       name: str($("fName").value, 80), gym: str($("fGym").value, 80),
-      level: LEVELS.includes(level) ? level : "", size: SIZES.includes(size) ? size : "",
+      categories: CATEGORIES.filter((c) => formCats.has(c)), size: SIZES.includes(size) ? size : "",
       date: isDate($("fDate").value) ? $("fDate").value : "",
-      note: str($("fNote").value, 1000), items: its, races: checkedIn($("raceChecklist")),
+      note: str($("fNote").value, 1000), items: its, races: races.filter((r) => formRaces.has(r.id)).map((r) => r.id),
     };
     if (!data.name) { $("formMsg").textContent = "Enter a name."; $("fName").focus(); return; }
     const b = $("saveBtn"); b.disabled = true;
@@ -404,13 +438,10 @@
     }
     return [...out.values()];
   }
-  function normLevel(s) {
-    const v = String(s || "").trim().toLowerCase();
-    if (!v) return [""];
-    if (v.startsWith("beg")) return ["Beginner"];
-    if (v.startsWith("int")) return ["Intermediate"];
-    if (v.startsWith("adv")) return ["Advanced"];
-    return ["", `level "${s.trim()}" not recognised`];
+  function normCats(s) {
+    const out = [], bad = [];
+    for (const v of multi(s)) { const c = CATEGORIES.find((x) => x.toLowerCase() === v.toLowerCase()); c ? (out.includes(c) || out.push(c)) : bad.push(v); }
+    return [out, bad.length ? `category "${bad.join(", ")}" not recognised` : ""];
   }
   function normSize(s) {
     let v = String(s || "").trim().toUpperCase().replace(/\s+/g, "");
@@ -428,8 +459,8 @@
       const c = splitLine(line).map((x) => x.trim());
       if (i === 0 && c[0] && c[0].toLowerCase() === "name") return;      // header row
       const name = c[0].slice(0, 80), gym = (c[1] || "").slice(0, 80);
-      const [level, lw] = normLevel(c[2]); const [size, sw] = normSize(c[3]);
-      const row = { name, gym, level, size, races: multi(c[4]), items: parseItems(c[5]),
+      const [categories, lw] = normCats(c[2]); const [size, sw] = normSize(c[3]);
+      const row = { name, gym, categories, size, races: multi(c[4]), items: parseItems(c[5]),
         note: c.slice(6).filter(Boolean).join(", ").slice(0, 1000), warn: [lw, sw].filter(Boolean), skip: "" };
       const key = (name + "|" + gym).toLowerCase();
       if (!name) row.skip = "no name";
@@ -467,7 +498,7 @@
     for (const r of bulkRows.slice(0, 200)) {
       const li = el("li", r.skip ? "skip" : "");
       li.append(el("span", "p-name", (r.name || "(no name)") + (r.skip ? ` — skipped: ${r.skip}` : "")));
-      const sub = [r.gym, r.level, r.size && "Size " + r.size].filter(Boolean).join(" · ");
+      const sub = [r.gym, r.categories.join(", "), r.size && "Size " + r.size].filter(Boolean).join(" · ");
       if (sub) li.append(el("span", "p-sub", sub));
       if (r.races.length) li.append(el("span", "p-sub", "Races: " + r.races.join(", ")));
       if (r.items.length) li.append(el("span", "p-sub", "Items: " + r.items.map((x) => x.qty > 1 ? `${x.name} ×${x.qty}` : x.name).join(", ")));
@@ -512,14 +543,18 @@
     sel.value = opts.some(([v]) => v === cur) ? cur : "";
   }
 
+  let pendingRender = false;
   function render() {
+    const ae = document.activeElement;
+    if (ae && ae.closest && ae.closest("#list .add-inline") && ae.value) { pendingRender = true; return; }
+    pendingRender = false;
     const gyms = [...new Set(people.map((p) => p.gym).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     fillSelect($("qGym"), gyms.map((g) => [g, g]), "All gyms");
     fillSelect($("qRace"), races.map((r) => [r.id, r.name]), "All races");
     $("gymList").replaceChildren(...gyms.map((v) => new Option(v)));
 
-    const q = $("qSearch").value.trim().toLowerCase(), g = $("qGym").value, rid = $("qRace").value;
-    const shown = people.filter((p) => (!g || p.gym === g) && (!rid || p.races.includes(rid)) &&
+    const q = $("qSearch").value.trim().toLowerCase(), g = $("qGym").value, rid = $("qRace").value, cat = $("qCat").value;
+    const shown = people.filter((p) => (!g || p.gym === g) && (!rid || p.races.includes(rid)) && (!cat || p.categories.includes(cat)) &&
       (!q || (p.name + " " + p.gym + " " + p.note).toLowerCase().includes(q)))
       .sort((a, b) => a.name.localeCompare(b.name));
     $("count").textContent = people.length ? `${shown.length}/${people.length}` : "";
@@ -551,7 +586,7 @@
     const who = el("div", "who");
     const myRaces = p.races.map((id) => rmap.get(id)).filter(Boolean);
     who.append(el("div", "name", p.name),
-      el("div", "meta", [p.gym, p.size, myRaces.length ? myRaces.length + (myRaces.length === 1 ? " race" : " races") : ""].filter(Boolean).join(" · ") || "—"));
+      el("div", "meta", [p.gym, p.categories.join(", "), p.size, myRaces.length ? myRaces.length + (myRaces.length === 1 ? " race" : " races") : ""].filter(Boolean).join(" · ") || "—"));
     row.append(el("div", "avatar", initials || "?"), who,
       el("span", "score" + (items.length && given === items.length ? " full" : ""), `${given}/${items.length}`));
     row.addEventListener("click", () => { openId = openId === p.id ? null : p.id; armedDelete = null; render(); });
@@ -564,18 +599,15 @@
         for (const it of items) t.append(stepper(it.name, p.items[it.id] || 0, (q) => setQty(p, it.id, q)));
         d.append(el("div", "sec-lbl", "Items given"), t);
       }
-      if (races.length) {
-        const t = el("div", "ticks");
-        for (const r of races) {
-          const on = p.races.includes(r.id);
-          const b = btn("tick race" + (on ? " on" : ""), r.name, () => toggleRace(p, r.id));
-          b.setAttribute("aria-pressed", String(on)); t.append(b);
-        }
+      {
+        const t = el("div", "qty-list");
+        for (const r of races) t.append(checkRow(r.name, p.races.includes(r.id), () => toggleRace(p, r.id), fmtDate(r.date)));
+        t.append(addRaceRow(async (id) => { if (!p.races.includes(id)) await toggleRace(p, id); }));
         d.append(el("div", "sec-lbl", "Races done"), t);
       }
       const facts = el("div", "facts");
       const fact = (label, v) => { if (!v) return; const s = el("span", null, label + " "); s.append(el("b", null, v)); facts.append(s); };
-      fact("Level", p.level); fact("Size", p.size); fact("Date", fmtDate(p.date));
+      fact("Category", p.categories.join(", ")); fact("Size", p.size); fact("Date", fmtDate(p.date));
       if (facts.childElementCount) d.append(facts);
       if (p.note) d.append(el("div", "note", p.note));
       const act = el("div", "actions");
@@ -590,7 +622,7 @@
     return li;
   }
 
-  for (const id of ["qSearch", "qGym", "qRace"]) $(id).addEventListener("input", render);
+  for (const id of ["qSearch", "qGym", "qRace", "qCat"]) $(id).addEventListener("input", render);
 
   // ---------- Header menu ----------
   function setMenu(open) { $("menu").hidden = !open; $("menuBtn").setAttribute("aria-expanded", String(open)); }
