@@ -185,6 +185,57 @@ textarea{min-height:90px;resize:vertical}
 .add-inline:first-child{border-top:0}
 .add-inline input{padding:9px 12px;font-size:16px}
 .filters{grid-template-columns:1fr 1fr}
-#qCat{grid-column:1/-1}
-@media (min-width:560px){.filters{grid-template-columns:1fr 1fr 1fr}#qCat{grid-column:auto}}
 .add-row-2{grid-template-columns:1fr auto}
+
+/* Logo */
+.logo-h{margin:0;line-height:0}
+.logo{height:40px;width:auto;display:block}
+.login-logo{height:72px;margin:0 auto}
+.title-left{align-items:center}
+
+/* Photos */
+.avatar{overflow:hidden}
+.avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.photo-field{display:flex;align-items:center;gap:14px}
+.photo-big{width:84px;height:84px;border-radius:50%;background:var(--soft);display:grid;place-items:center;overflow:hidden;flex:none;color:var(--muted);font-size:12px}
+.photo-big img{width:100%;height:100%;object-fit:cover}
+.photo-actions{display:flex;gap:8px;flex-wrap:wrap}
+label.btn-sm{display:inline-flex;align-items:center}
+.visually-hidden{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+#fComp{min-height:70px}
+
+/* PDF report: hidden on screen, the only thing printed */
+.report{display:none}
+@page{size:A4 landscape;margin:12mm}
+@media print{
+  html,body{background:#fff!important;padding:0!important}
+  body::before{display:none!important}
+  body>*{display:none!important}
+  body>#report{display:block!important}
+  .report{font-family:var(--f);color:#111418;font-size:9.5pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .rp-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:10px;border-bottom:2px solid #111418;margin-bottom:10px}
+  .rp-logo{height:46px;width:auto}
+  .rp-meta{text-align:right}
+  .rp-title{font-size:15pt;font-weight:700;letter-spacing:.02em}
+  .rp-sub{color:#5b6470;font-size:9pt;margin-top:2px}
+  .rp-summary{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+  .rp-chip{border:1px solid #e3e5e9;border-radius:6px;padding:4px 9px;display:flex;gap:6px;align-items:baseline;font-size:9pt}
+  .rp-chip b{color:#b38b5d}
+  .rp-table{width:100%;border-collapse:collapse;table-layout:auto}
+  .rp-table thead{display:table-header-group}
+  .rp-table tr{break-inside:avoid;page-break-inside:avoid}
+  .rp-table th{background:#111418;color:#fff;font-weight:600;font-size:8.5pt;text-align:left;padding:6px 6px;border:1px solid #111418}
+  .rp-table td{padding:5px 6px;border:1px solid #e3e5e9;vertical-align:middle}
+  .rp-table tbody tr:nth-child(even) td{background:#f7f7f8}
+  .rp-table .num{width:22px;text-align:right;color:#5b6470}
+  .rp-table .c{text-align:center}
+  .rp-table th.item{width:52px}
+  .rp-table .ph{width:30px;padding:3px}
+  .rp-table .ph img{width:26px;height:26px;border-radius:50%;object-fit:cover;display:block}
+  .rp-table .who b{display:block;font-weight:600}
+  .rp-table .who span{display:block;color:#5b6470;font-size:8pt}
+  .rp-table .txt{max-width:170px;font-size:8.5pt;white-space:pre-wrap;overflow-wrap:anywhere}
+  .rp-table .yes{color:#14804a;font-weight:700;font-size:11pt}
+  .rp-table .no{color:#c4c8ce}
+  .rp-foot{margin-top:10px;color:#8a919b;font-size:8pt;text-align:right}
+}

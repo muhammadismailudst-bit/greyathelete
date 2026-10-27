@@ -55,14 +55,15 @@
   }
 
   // ---------- State ----------
-  let people = [], races = [], items = [], categories = [];
+  let people = [], items = [], categories = [];
+  const photos = new Map();                 // personId -> { ts, data } (data URL)
   let editingId = null, openId = null, armedDelete = null;
-  let size = "", formCats = new Set(), formRaces = new Set(), formItems = new Set();
-  let last = { date: "", gym: "", races: [] };
-  let manageEditing = null;                 // "race:<id>" | "item:<id>" | "cat:<name>"
+  let size = "", formCats = new Set(), formItems = new Set();
+  let formPhoto = { changed: false, data: null };
+  let last = { date: "", gym: "" };
+  let manageEditing = null;                 // "item:<id>" | "cat:<name>"
   let loadSeq = 0, timer = null;
 
-  const raceById = () => new Map(races.map((r) => [r.id, r]));
 
   // ---------- Views ----------
   function show(view) {
@@ -76,7 +77,7 @@
     if (callServer && token) rpc("logout", { p_token: token }).catch(() => {});
     saveToken(null);
     clearInterval(timer); timer = null;
-    people = []; races = []; items = []; categories = []; openId = null;
+    people = []; items = []; categories = []; photos.clear(); openId = null;
     closeSheet(); closeManage(); $("bulk").hidden = true;
     $("list").replaceChildren();
     $("pin").value = ""; $("loginMsg").textContent = "";
@@ -118,7 +119,7 @@
     if (d.items && typeof d.items === "object") for (const k of Object.keys(d.items)) if (d.items[k] === true || d.items[k] > 0) its[k] = true;
     return {
       id: String(d.id), items: its,
-      races: Array.isArray(d.races) ? d.races.map(String) : [],
+      competitions: str(d.competitions, 2000), photoTs: typeof d.photo === "string" ? d.photo : "",
       name: str(d.name, 80) || "Unnamed", gym: str(d.gym, 80), categories: Array.isArray(d.categories) ? d.categories.map((c) => str(c, 40)).filter(Boolean) : [], size: str(d.size, 10),
       date: str(d.date, 10), note: str(d.note, 1000), createdAt: Date.parse(d.created_at) || 0,
     };
@@ -130,18 +131,40 @@
       const data = await call("list_all", {});
       if (seq !== loadSeq) return;
       people = (Array.isArray(data && data.people) ? data.people : []).map(cleanPerson);
-      races = (Array.isArray(data && data.races) ? data.races : []).map((r) => ({ id: String(r.id), name: str(r.name, 60), date: str(r.date, 10), note: str(r.note, 2000) }));
       items = (Array.isArray(data && data.items) ? data.items : []).map((i) => ({ id: String(i.id), name: str(i.name, 40) }));
       categories = (Array.isArray(data && data.categories) ? data.categories : []).map((c) => str(c, 40)).filter(Boolean);
       if (openId && !people.some((p) => p.id === openId)) openId = null;
       setStatus("");
       render();
       if (!$("manage").hidden && !manageEditing) renderManage();
+      loadPhotos();
     } catch (err) {
       if (err.code === "locked") return;
       if (seq === loadSeq) setStatus(err.code === "offline" ? "Offline. Showing the last loaded list." : "Couldn't load the list. Reopen the app to retry.");
     }
   }
+  // Fetch only photos that are new or changed since we last saw them.
+  let photoBusy = false;
+  async function loadPhotos() {
+    if (photoBusy) return;
+    for (const id of [...photos.keys()]) if (!people.some((p) => p.id === id && p.photoTs)) photos.delete(id);
+    const need = people.filter((p) => p.photoTs && (!photos.has(p.id) || photos.get(p.id).ts !== p.photoTs));
+    if (!need.length) return;
+    photoBusy = true;
+    try {
+      for (let i = 0; i < need.length; i += 100) {
+        const chunk = need.slice(i, i + 100);
+        const got = await call("get_photos", { p_ids: chunk.map((p) => p.id) });
+        for (const p of chunk) {
+          const d = got && got[p.id];
+          if (typeof d === "string" && d.startsWith("data:image/jpeg;base64,")) photos.set(p.id, { ts: p.photoTs, data: d });
+        }
+      }
+      render();
+    } catch { /* photos are optional; try again next refresh */ }
+    finally { photoBusy = false; }
+  }
+
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && token && !$("appView").hidden) load(); });
 
   // ---------- Toast ----------
@@ -168,11 +191,8 @@
     return row;
   }
 
-  // Find-or-create for each list. Each returns the key used on a person (race id, item id, category name).
+  // Find-or-create for each list. Each returns the key used on a person (item id or category name).
   const LISTS = {
-    race: { word: "race", max: 60,
-      find: (n) => races.find((r) => r.name.toLowerCase() === n.toLowerCase())?.id,
-      create: async (n) => { const id = String(await call("save_race", { p_id: null, p_name: n, p_date: null, p_note: "" })); races = [{ id, name: n, date: "", note: "" }, ...races]; return id; } },
     item: { word: "item", max: 40,
       find: (n) => items.find((i) => i.name.toLowerCase() === n.toLowerCase())?.id,
       create: async (n) => { const id = String(await call("save_item", { p_id: null, p_name: n })); items = [...items, { id, name: n }]; return id; } },
@@ -212,20 +232,47 @@
     for (const c of categories) box.append(checkRow(c, formCats.has(c), (on) => { on ? formCats.add(c) : formCats.delete(c); renderFormCats(); }));
     box.append(addRow("cat", async (c) => { formCats.add(c); renderFormCats(); }));
   }
-  function renderFormRaces() {
-    const box = $("raceChecklist"); box.replaceChildren();
-    for (const r of races) box.append(checkRow(r.name, formRaces.has(r.id), (on) => { on ? formRaces.add(r.id) : formRaces.delete(r.id); renderFormRaces(); }, fmtDate(r.date)));
-    box.append(addRow("race", async (id) => { formRaces.add(id); renderFormRaces(); }));
-  }
   function renderFormItems() {
     const box = $("checklist"); box.replaceChildren();
     for (const it of items) box.append(checkRow(it.name, formItems.has(it.id), (on) => { on ? formItems.add(it.id) : formItems.delete(it.id); renderFormItems(); }));
     box.append(addRow("item", async (id) => { formItems.add(id); renderFormItems(); }));
   }
 
+  // ---------- Photo ----------
+  function renderFormPhoto() {
+    const box = $("fPhotoPreview"); box.replaceChildren();
+    if (formPhoto.data) { const img = new Image(); img.src = formPhoto.data; img.alt = ""; box.append(img); }
+    else box.append(el("span", null, "No photo"));
+    $("fPhotoLabel").textContent = formPhoto.data ? "Change photo" : "Add photo";
+    $("fPhotoRemove").hidden = !formPhoto.data;
+  }
+  // Shrink to at most 480px, centre-cropped square, as JPEG (about 30–60 KB).
+  async function toJpeg(file) {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = url; });
+      const side = Math.min(img.naturalWidth, img.naturalHeight);
+      if (!side) throw new Error("empty");
+      const out = Math.min(480, side);
+      const c = document.createElement("canvas"); c.width = c.height = out;
+      const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, out, out);
+      g.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, out, out);
+      for (const q of [0.82, 0.7, 0.55]) { const d = c.toDataURL("image/jpeg", q); if (d.length <= 290000) return d; }
+      throw new Error("too_big");
+    } finally { URL.revokeObjectURL(url); }
+  }
+  $("fPhoto").addEventListener("change", async () => {
+    const f = $("fPhoto").files && $("fPhoto").files[0]; $("fPhoto").value = "";
+    if (!f) return;
+    if (!/^image\//.test(f.type) && !/\.(jpe?g|png|heic|heif|webp)$/i.test(f.name)) { $("formMsg").textContent = "That file isn't a photo."; return; }
+    try { formPhoto = { changed: true, data: await toJpeg(f) }; renderFormPhoto(); $("formMsg").textContent = ""; }
+    catch { $("formMsg").textContent = "Couldn't read that photo. Try a different one."; }
+  });
+  $("fPhotoRemove").addEventListener("click", () => { formPhoto = { changed: true, data: null }; renderFormPhoto(); });
+
   function openSheet(p) {
     editingId = p ? p.id : null;
-    $("sheetTitle").textContent = p ? "Edit person" : "Add person";
+    $("sheetTitle").textContent = p ? "Edit athlete" : "Add athlete";
     $("fName").value = p ? p.name : "";
     $("fGym").value = p ? p.gym : last.gym;
     $("fDate").value = p ? (p.date || "") : (last.date || today());
@@ -233,12 +280,12 @@
     size = p ? p.size : ""; syncSeg($("segSize"), size);
     formCats = new Set(p ? p.categories : []);
     renderFormCats();
-    const presetRace = $("qRace").value;
-    formRaces = new Set(p ? p.races : (presetRace ? [presetRace] : last.races));
-    renderFormRaces();
+    $("fComp").value = p ? p.competitions : "";
+    formPhoto = { changed: false, data: p && photos.has(p.id) ? photos.get(p.id).data : null };
+    renderFormPhoto();
     formItems = new Set(p ? Object.keys(p.items) : []);
     renderFormItems();
-    $("deleteBtn").hidden = !p; $("deleteBtn").textContent = "Delete person"; armedDelete = null;
+    $("deleteBtn").hidden = !p; $("deleteBtn").textContent = "Delete athlete"; armedDelete = null;
     $("formMsg").textContent = "";
     $("toast").hidden = true;
     $("sheet").hidden = false; document.body.classList.add("locked");
@@ -261,14 +308,18 @@
       name: str($("fName").value, 80), gym: str($("fGym").value, 80),
       categories: categories.filter((c) => formCats.has(c)), size: SIZES.includes(size) ? size : "",
       date: isDate($("fDate").value) ? $("fDate").value : "",
-      note: str($("fNote").value, 1000), items: its, races: races.filter((r) => formRaces.has(r.id)).map((r) => r.id),
+      note: str($("fNote").value, 1000), items: its, competitions: str($("fComp").value, 2000),
     };
     if (!data.name) { $("formMsg").textContent = "Enter a name."; $("fName").focus(); return; }
     const b = $("saveBtn"); b.disabled = true;
     try {
-      await call("save_person", { p_id: editingId, p_data: data });
+      const id = String(await call("save_person", { p_id: editingId, p_data: data }));
+      if (formPhoto.changed) {
+        try { await call("set_photo", { p_id: id, p_data: formPhoto.data }); }
+        catch (err) { if (err.code === "locked") throw err; toast("Saved, but the photo didn't upload. Try again from Edit."); }
+      }
       toast((editingId ? "Saved " : "Added ") + data.name);
-      last = { date: data.date, gym: data.gym, races: data.races };
+      last = { date: data.date, gym: data.gym };
       closeSheet(); load();
     } catch (err) { if (err.code !== "locked") $("formMsg").textContent = errorText(err); }
     finally { b.disabled = false; }
@@ -289,14 +340,6 @@
     if (await deletePerson(id, name)) closeSheet();
   });
 
-  async function toggleRace(p, id) {
-    const on = !p.races.includes(id);
-    p.races = on ? [...p.races, id] : p.races.filter((r) => r !== id);
-    render();
-    try { await call("toggle_race", { p_id: p.id, p_race: id, p_value: on }); load(); }
-    catch (err) { load(); if (err.code !== "locked") toast(errorText(err)); }
-  }
-
   async function toggleItem(p, id) {
     const on = !p.items[id];
     if (on) p.items[id] = true; else delete p.items[id];
@@ -313,7 +356,7 @@
     catch (err) { load(); if (err.code !== "locked") toast(errorText(err)); }
   }
 
-  // ---------- Races & items sheet ----------
+  // ---------- Lists sheet (categories & items) ----------
   function openManage() { manageEditing = null; armedDelete = null; $("manageMsg").textContent = ""; renderManage(); $("manage").hidden = false; document.body.classList.add("locked"); }
   function closeManage() { $("manage").hidden = true; manageEditing = null; if ($("sheet").hidden) document.body.classList.remove("locked"); }
   $("manageBtn").addEventListener("click", openManage);
@@ -326,14 +369,6 @@
     catch (err) { if (err.code !== "locked") $("manageMsg").textContent = errorText(err); return false; }
   }
 
-  $("raceAdd").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const name = str($("newRace").value, 60); if (!name) { $("newRace").focus(); return; }
-    const d = $("newRaceDate").value;
-    if (await manageCall("save_race", { p_id: null, p_name: name, p_date: isDate(d) ? d : null, p_note: "" }, "Added " + name)) {
-      $("newRace").value = ""; $("newRaceDate").value = "";
-    }
-  });
   $("catAdd").addEventListener("submit", async (e) => {
     e.preventDefault();
     const name = str($("newCat").value, 40); if (!name) { $("newCat").focus(); return; }
@@ -346,36 +381,6 @@
   });
 
   function renderManage() {
-    const rl = $("raceList"); rl.replaceChildren();
-    for (const r of races) {
-      const used = people.filter((p) => p.races.includes(r.id)).length;
-      const li = el("li");
-      if (manageEditing === "race:" + r.id) {
-        const f = el("div", "m-edit");
-        const n = document.createElement("input"); n.maxLength = 60; n.value = r.name; n.setAttribute("aria-label", "Race name");
-        const d = document.createElement("input"); d.type = "date"; d.value = r.date; d.setAttribute("aria-label", "Race date");
-        const t = document.createElement("textarea"); t.maxLength = 2000; t.value = r.note; t.placeholder = "Race note (optional)";
-        const del = btn("btn-sm danger push", armedDelete === "race:" + r.id ? `Tap again (removes from ${used})` : "Delete", () => {
-          if (armedDelete !== "race:" + r.id) { armedDelete = "race:" + r.id; renderManage(); return; }
-          manageCall("delete_race", { p_id: r.id }, "Deleted " + r.name);
-        });
-        const act = el("div", "actions");
-        act.append(btn("btn-sm", "Cancel", () => { manageEditing = null; armedDelete = null; renderManage(); }),
-          btn("btn-sm dark", "Save", () => {
-            const nm = str(n.value, 60); if (!nm) { n.focus(); return; }
-            manageCall("save_race", { p_id: r.id, p_name: nm, p_date: isDate(d.value) ? d.value : null, p_note: str(t.value, 2000) }, "Saved " + nm);
-          }), del);
-        f.append(n, d, t, act); li.append(f);
-      } else {
-        const row = el("div", "m-row");
-        const nm = el("div", "m-name", r.name);
-        nm.append(el("div", "m-sub", [fmtDate(r.date), used + (used === 1 ? " person" : " people")].filter(Boolean).join(" · ")));
-        row.append(nm, btn("btn-sm", "Edit", () => { manageEditing = "race:" + r.id; armedDelete = null; renderManage(); }));
-        li.append(row);
-      }
-      rl.append(li);
-    }
-
     const cl = $("catList"); cl.replaceChildren();
     for (const c of categories) {
       const used = people.filter((p) => p.categories.includes(c)).length;
@@ -467,7 +472,7 @@
       if (i === 0 && c[0] && c[0].toLowerCase() === "name") return;      // header row
       const name = c[0].slice(0, 80), gym = (c[1] || "").slice(0, 80);
       const [size, sw] = normSize(c[3]);
-      const row = { name, gym, categories: multi(c[2]), size, races: multi(c[4]), items: multi(c[5]),
+      const row = { name, gym, categories: multi(c[2]), size, competitions: multi(c[4]).join(", ").slice(0, 2000), items: multi(c[5]),
         note: c.slice(6).filter(Boolean).join(", ").slice(0, 1000), warn: [sw].filter(Boolean), skip: "" };
       const key = (name + "|" + gym).toLowerCase();
       if (!name) row.skip = "no name";
@@ -488,10 +493,9 @@
     $("bulkMsg").textContent = add.length > BULK_MAX ? `That's ${add.length} people. Add at most ${BULK_MAX} at a time.` : "";
     if (!bulkRows.length) return;
 
-    const knownR = new Set(races.map((r) => r.name.toLowerCase())), knownI = new Set(items.map((i) => i.name.toLowerCase())), knownC = new Set(categories.map((c) => c.toLowerCase()));
-    const newR = new Map(), newI = new Map(), newC = new Map();
+    const knownI = new Set(items.map((i) => i.name.toLowerCase())), knownC = new Set(categories.map((c) => c.toLowerCase()));
+    const newI = new Map(), newC = new Map();
     for (const r of add) {
-      for (const x of r.races) if (!knownR.has(x.toLowerCase())) newR.set(x.toLowerCase(), x);
       for (const x of r.items) if (!knownI.has(x.toLowerCase())) newI.set(x.toLowerCase(), x);
       for (const x of r.categories) if (!knownC.has(x.toLowerCase())) newC.set(x.toLowerCase(), x);
     }
@@ -499,7 +503,6 @@
     const head = el("div", "preview-head");
     const skipped = bulkRows.length - add.length;
     head.append(el("b", null, `${add.length} to add` + (skipped ? ` · ${skipped} skipped` : "")));
-    if (newR.size) head.append(el("span", null, "New races: " + [...newR.values()].join(", ")));
     if (newI.size) head.append(el("span", null, "New items: " + [...newI.values()].join(", ")));
     if (newC.size) head.append(el("span", null, "New categories: " + [...newC.values()].join(", ")));
     wrap.append(head);
@@ -509,7 +512,7 @@
       li.append(el("span", "p-name", (r.name || "(no name)") + (r.skip ? ` — skipped: ${r.skip}` : "")));
       const sub = [r.gym, r.categories.join(", "), r.size && "Size " + r.size].filter(Boolean).join(" · ");
       if (sub) li.append(el("span", "p-sub", sub));
-      if (r.races.length) li.append(el("span", "p-sub", "Races: " + r.races.join(", ")));
+      if (r.competitions) li.append(el("span", "p-sub", "Competitions: " + r.competitions));
       if (r.items.length) li.append(el("span", "p-sub", "Items: " + r.items.join(", ")));
       if (r.note) li.append(el("span", "p-sub", "Note: " + r.note));
       for (const w of r.warn) li.append(el("span", "p-sub warn", w + " (left blank)"));
@@ -553,32 +556,28 @@
   }
 
   let pendingRender = false;
+  function filtered() {
+    const q = $("qSearch").value.trim().toLowerCase(), g = $("qGym").value, cat = $("qCat").value;
+    return people.filter((p) => (!g || p.gym === g) && (!cat || p.categories.includes(cat)) &&
+      (!q || [p.name, p.gym, p.competitions, p.note].join(" ").toLowerCase().includes(q)))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   function render() {
     const ae = document.activeElement;
     if (ae && ae.closest && ae.closest("#list .add-inline") && ae.value) { pendingRender = true; return; }
     pendingRender = false;
     const gyms = [...new Set(people.map((p) => p.gym).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     fillSelect($("qGym"), gyms.map((g) => [g, g]), "All gyms");
-    fillSelect($("qRace"), races.map((r) => [r.id, r.name]), "All races");
     fillSelect($("qCat"), categories.map((c) => [c, c]), "All categories");
     $("gymList").replaceChildren(...gyms.map((v) => new Option(v)));
 
-    const q = $("qSearch").value.trim().toLowerCase(), g = $("qGym").value, rid = $("qRace").value, cat = $("qCat").value;
-    const shown = people.filter((p) => (!g || p.gym === g) && (!rid || p.races.includes(rid)) && (!cat || p.categories.includes(cat)) &&
-      (!q || (p.name + " " + p.gym + " " + p.note).toLowerCase().includes(q)))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    const shown = filtered();
     $("count").textContent = people.length ? `${shown.length}/${people.length}` : "";
 
     const list = $("list"); list.replaceChildren();
-    const race = rid ? raceById().get(rid) : null;
-    if (race) {
-      const ban = el("div", "race-banner");
-      ban.append(el("b", null, race.name), el("span", "m-sub", [fmtDate(race.date), shown.length + (shown.length === 1 ? " person" : " people")].filter(Boolean).join(" · ")));
-      if (race.note) ban.append(el("span", "m-sub", race.note));
-      list.append(ban);
-    }
     if (!people.length) {
-      const e = el("div", "empty"); e.append(el("b", null, "No one added yet"), el("span", null, "Tap + Add to add someone, or use ⋯ → Bulk add for a list."));
+      const e = el("div", "empty"); e.append(el("b", null, "No one added yet"), el("span", null, "Tap + Add to add an athlete, or use ⋯ → Bulk add for a list."));
       list.append(e); return;
     }
     if (!shown.length) { const e = el("div", "empty"); e.append(el("b", null, "No matches"), el("span", null, "Try a different search or filter.")); list.append(e); return; }
@@ -587,17 +586,23 @@
     list.append(ul);
   }
 
+  function avatar(p, initials) {
+    const a = el("div", "avatar");
+    const ph = photos.get(p.id);
+    if (ph) { const img = new Image(); img.src = ph.data; img.alt = ""; a.append(img); }
+    else a.textContent = initials || "?";
+    return a;
+  }
+
   function personRow(p) {
     const li = el("li", "person");
-    const rmap = raceById();
     const given = items.filter((i) => p.items[i.id]).length;
     const row = el("button", "row"); row.type = "button"; row.setAttribute("aria-expanded", String(openId === p.id));
     const initials = p.name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
     const who = el("div", "who");
-    const myRaces = p.races.map((id) => rmap.get(id)).filter(Boolean);
     who.append(el("div", "name", p.name),
-      el("div", "meta", [p.gym, p.categories.join(", "), p.size, myRaces.length ? myRaces.length + (myRaces.length === 1 ? " race" : " races") : ""].filter(Boolean).join(" · ") || "—"));
-    row.append(el("div", "avatar", initials || "?"), who,
+      el("div", "meta", [p.gym, p.categories.join(", "), p.size].filter(Boolean).join(" · ") || "—"));
+    row.append(avatar(p, initials), who,
       el("span", "score" + (items.length && given === items.length ? " full" : ""), `${given}/${items.length}`));
     row.addEventListener("click", () => { openId = openId === p.id ? null : p.id; armedDelete = null; render(); });
     li.append(row);
@@ -612,8 +617,7 @@
         "cat", async (c) => { if (!p.categories.includes(c)) await toggleCat(p, c); });
       section("Items given", items.map((it) => checkRow(it.name, !!p.items[it.id], () => toggleItem(p, it.id))),
         "item", async (id) => { if (!p.items[id]) await toggleItem(p, id); });
-      section("Races done", races.map((r) => checkRow(r.name, p.races.includes(r.id), () => toggleRace(p, r.id), fmtDate(r.date))),
-        "race", async (id) => { if (!p.races.includes(id)) await toggleRace(p, id); });
+      if (p.competitions) { d.append(el("div", "sec-lbl", "Competitions")); d.append(el("div", "note", p.competitions)); }
       const facts = el("div", "facts");
       const fact = (label, v) => { if (!v) return; const s = el("span", null, label + " "); s.append(el("b", null, v)); facts.append(s); };
       fact("Size", p.size); fact("Date", fmtDate(p.date));
@@ -631,7 +635,74 @@
     return li;
   }
 
-  for (const id of ["qSearch", "qGym", "qRace", "qCat"]) $(id).addEventListener("input", render);
+  for (const id of ["qSearch", "qGym", "qCat"]) $(id).addEventListener("input", render);
+
+  // ---------- PDF report ----------
+  // Builds a print-only page and opens the system print dialog ("Save as PDF" / Share → Save to Files).
+  function buildReport(list) {
+    const r = $("report"); r.replaceChildren();
+    const head = el("div", "rp-head");
+    const logo = new Image(); logo.src = "assets/logo.png"; logo.alt = "Grey Athletes"; logo.className = "rp-logo";
+    const meta = el("div", "rp-meta");
+    const now = new Date();
+    meta.append(el("div", "rp-title", "Athlete kit report"),
+      el("div", "rp-sub", now.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) + " · " + list.length + (list.length === 1 ? " athlete" : " athletes")));
+    const filters = [$("qCat").value && "Category: " + $("qCat").value, $("qGym").value && "Gym: " + $("qGym").value,
+      $("qSearch").value.trim() && `Search: "${$("qSearch").value.trim()}"`].filter(Boolean);
+    if (filters.length) meta.append(el("div", "rp-sub", filters.join(" · ")));
+    head.append(logo, meta);
+    r.append(head);
+
+    // Summary chips: how many got each item
+    const sum = el("div", "rp-summary");
+    for (const it of items) {
+      const n = list.filter((p) => p.items[it.id]).length;
+      const c = el("div", "rp-chip"); c.append(el("b", null, `${n}/${list.length}`), el("span", null, it.name)); sum.append(c);
+    }
+    r.append(sum);
+
+    const withPhotos = list.some((p) => photos.has(p.id));
+    const t = el("table", "rp-table");
+    const thead = el("thead"), hr = el("tr");
+    const th = (txt, cls) => hr.append(el("th", cls || null, txt));
+    th("#", "num"); if (withPhotos) th("", "ph"); th("Athlete"); th("Category"); th("Size", "c");
+    for (const it of items) th(it.name, "c item");
+    th("Competitions"); th("Note");
+    thead.append(hr); t.append(thead);
+    const tb = el("tbody");
+    list.forEach((p, i) => {
+      const tr = el("tr");
+      tr.append(el("td", "num", String(i + 1)));
+      if (withPhotos) {
+        const td = el("td", "ph"); const ph = photos.get(p.id);
+        if (ph) { const img = new Image(); img.src = ph.data; img.alt = ""; td.append(img); }
+        tr.append(td);
+      }
+      const who = el("td", "who"); who.append(el("b", null, p.name)); if (p.gym) who.append(el("span", null, p.gym));
+      tr.append(who, el("td", null, p.categories.join(", ")), el("td", "c", p.size));
+      for (const it of items) { const td = el("td", "c item"); td.append(el("span", p.items[it.id] ? "yes" : "no", p.items[it.id] ? "✓" : "–")); tr.append(td); }
+      tr.append(el("td", "txt", p.competitions), el("td", "txt", p.note));
+      tb.append(tr);
+    });
+    t.append(tb);
+    r.append(t);
+    r.append(el("div", "rp-foot", "Grey Athletes · generated " + now.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })));
+    return [...r.querySelectorAll("img")];
+  }
+
+  $("pdfBtn").addEventListener("click", async () => {
+    const list = filtered();
+    if (!list.length) { toast("Nothing to export. Clear the filters or add athletes first."); return; }
+    toast("Preparing PDF…");
+    await loadPhotos();
+    const imgs = buildReport(list);
+    await Promise.all(imgs.map((img) => (img.complete ? null : new Promise((ok) => { img.onload = img.onerror = ok; }))));
+    const oldTitle = document.title;
+    document.title = "Grey Athletes - kit report - " + today();
+    $("toast").hidden = true;
+    try { window.print(); } catch { toast("Printing isn't available here. Open the site in Safari or Chrome."); }
+    setTimeout(() => { document.title = oldTitle; }, 1000);
+  });
 
   // ---------- Header menu ----------
   function setMenu(open) { $("menu").hidden = !open; $("menuBtn").setAttribute("aria-expanded", String(open)); }

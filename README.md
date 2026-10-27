@@ -38,10 +38,14 @@ The site will be at `https://muhammadismailudst-bit.github.io/greyathelete/` wit
 Limits to know: everyone shares one PIN, so the app can't tell who changed what. Anyone who knows the PIN can see and change all records.
 
 ## Bulk add format
-Tap **Bulk add** and paste one person per line (commas, or rows copied from Excel / Google Sheets):
+Tap **⋯ → Bulk add** and paste one athlete per line (commas, or rows copied from Excel / Google Sheets):
 
 ```
-Name, Gym, Category, Size, Races, Items, Note
-Ali Khan, Iron Gym, Qatari; Rx, M, Hyrox Dubai; T-100, Bag; T-shirt, paid
+Name, Gym, Category, Size, Competitions, Items, Note
+Ali Khan, Iron Gym, Qatari; Rx, M, SBX Series; Savageline, Hand band; T-shirt, paid
 ```
-Only Name is required. Separate several categories, races or items with `;`. New category, race or item names are created. A header row and people already in the list (same name and gym) are skipped. Up to 500 at a time.
+Only Name is required. Separate several categories, competitions or items with `;`. New category or item names are added to the lists. A header row and athletes already in the list (same name and gym) are skipped. Up to 500 at a time.
+
+## Photos and PDF
+- **Photos:** in Add/Edit, tap **Add photo**. The photo is cropped square and shrunk to about 480px before upload, then stored in the `photos` table.
+- **Export PDF:** **⋯ → Export PDF** prints the athletes currently shown (search and filters apply) as an A4 landscape report with the logo, item ticks and totals. On iPhone the print sheet has **Save to Files** / **Share**. It needs Safari or Chrome; in-app browsers such as WhatsApp's may not print.
