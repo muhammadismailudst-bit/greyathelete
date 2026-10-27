@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://*.supabase.co; img-src 'self' data: blob:; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="referrer" content="no-referrer">
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#14171b">
 <title>Grey Athletes</title>
 <link rel="icon" href="assets/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -35,16 +35,15 @@
 
 <!-- App -->
 <div id="appView" hidden>
-  <div class="page">
-    <header class="pad">
-      <div class="title-row">
-        <div class="title-left">
-          <h1 class="logo-h"><img class="logo" src="assets/logo.png" alt="Grey Athletes"></h1>
-          <span class="count" id="count"></span>
-        </div>
-        <div class="title-right">
+  <header class="top">
+    <div class="top-inner">
+      <div class="top-row">
+        <h1 class="logo-h"><img class="logo-light" src="assets/logo-light.png" alt="Grey Athletes"></h1>
+        <div class="top-actions">
           <div class="menu-wrap">
-            <button class="icon-btn" id="menuBtn" type="button" aria-label="More" aria-haspopup="true" aria-expanded="false">⋯</button>
+            <button class="icon-btn" id="menuBtn" type="button" aria-label="More" aria-haspopup="true" aria-expanded="false">
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+            </button>
             <div class="menu" id="menu" role="menu" hidden>
               <button type="button" role="menuitem" id="pdfBtn">Export PDF</button>
               <button type="button" role="menuitem" id="bulkBtn">Bulk add</button>
@@ -52,17 +51,23 @@
               <button type="button" role="menuitem" id="lockBtn">Lock</button>
             </div>
           </div>
-          <button class="add-btn" id="addBtn" type="button">+ Add</button>
+          <button class="add-btn" id="addBtn" type="button"><span aria-hidden="true">+</span> Add</button>
         </div>
       </div>
-      <input id="qSearch" type="search" placeholder="Search name, gym, competition or note" aria-label="Search" autocomplete="off">
+      <div class="search">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="qSearch" type="search" placeholder="Search athletes, gyms, competitions" aria-label="Search" autocomplete="off">
+      </div>
       <div class="filters">
         <select id="qCat" aria-label="Filter by category"><option value="">All categories</option></select>
         <select id="qGym" aria-label="Filter by gym"><option value="">All gyms</option></select>
       </div>
-    </header>
+    </div>
+  </header>
 
+  <div class="page">
     <div class="pad">
+      <div class="stats" id="count"></div>
       <div class="status" id="status" hidden></div>
       <div id="list"></div>
     </div>

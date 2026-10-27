@@ -575,7 +575,10 @@
     $("gymList").replaceChildren(...gyms.map((v) => new Option(v)));
 
     const shown = filtered();
-    $("count").textContent = people.length ? `${shown.length}/${people.length}` : "";
+    const done = shown.filter((p) => items.length && items.every((i) => p.items[i.id])).length;
+    $("count").textContent = !people.length ? "" :
+      (shown.length === people.length ? `${people.length} ${people.length === 1 ? "athlete" : "athletes"}` : `${shown.length} of ${people.length} athletes`) +
+      (items.length ? ` · ${done} fully kitted` : "");
 
     const list = $("list"); list.replaceChildren();
     if (!people.length) {
@@ -600,7 +603,8 @@
     const li = el("li", "person");
     const given = items.filter((i) => p.items[i.id]).length;
     const row = el("button", "row"); row.type = "button"; row.setAttribute("aria-expanded", String(openId === p.id));
-    const initials = p.name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+    // First letter of the first two words that start with a letter or digit (emoji-safe).
+    const initials = p.name.split(/\s+/).map((w) => Array.from(w)[0] || "").filter((c) => /[\p{L}\p{N}]/u.test(c)).slice(0, 2).join("").toUpperCase();
     const who = el("div", "who");
     who.append(el("div", "name", p.name),
       el("div", "meta", [p.gym, p.categories.join(", "), p.size].filter(Boolean).join(" · ") || "—"));
