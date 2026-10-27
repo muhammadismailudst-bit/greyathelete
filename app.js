@@ -229,8 +229,8 @@
 
   function renderFormCats() {
     const box = $("catChecklist"); box.replaceChildren();
-    for (const c of categories) box.append(checkRow(c, formCats.has(c), (on) => { on ? formCats.add(c) : formCats.delete(c); renderFormCats(); }));
-    box.append(addRow("cat", async (c) => { formCats.add(c); renderFormCats(); }));
+    for (const c of categories) box.append(checkRow(c, formCats.has(c), (on) => { formCats = new Set(on ? [c] : []); renderFormCats(); }));
+    box.append(addRow("cat", async (c) => { formCats = new Set([c]); renderFormCats(); }));
   }
   function renderFormItems() {
     const box = $("checklist"); box.replaceChildren();
@@ -306,7 +306,7 @@
     const its = {}; for (const it of items) if (formItems.has(it.id)) its[it.id] = 1;
     const data = {
       name: str($("fName").value, 80), gym: str($("fGym").value, 80),
-      categories: categories.filter((c) => formCats.has(c)), size: SIZES.includes(size) ? size : "",
+      categories: categories.filter((c) => formCats.has(c)).slice(0, 1), size: SIZES.includes(size) ? size : "",
       date: isDate($("fDate").value) ? $("fDate").value : "",
       note: str($("fNote").value, 1000), items: its, competitions: str($("fComp").value, 2000),
     };
@@ -350,7 +350,7 @@
 
   async function toggleCat(p, name) {
     const on = !p.categories.includes(name);
-    p.categories = on ? categories.filter((c) => c === name || p.categories.includes(c)) : p.categories.filter((c) => c !== name);
+    p.categories = on ? [name] : [];
     render();
     try { await call("toggle_category", { p_id: p.id, p_name: name, p_value: on }); load(); }
     catch (err) { load(); if (err.code !== "locked") toast(errorText(err)); }
@@ -472,8 +472,10 @@
       if (i === 0 && c[0] && c[0].toLowerCase() === "name") return;      // header row
       const name = c[0].slice(0, 80), gym = (c[1] || "").slice(0, 80);
       const [size, sw] = normSize(c[3]);
-      const row = { name, gym, categories: multi(c[2]), size, competitions: multi(c[4]).join(", ").slice(0, 2000), items: multi(c[5]),
-        note: c.slice(6).filter(Boolean).join(", ").slice(0, 1000), warn: [sw].filter(Boolean), skip: "" };
+      const cats = multi(c[2]);
+      const row = { name, gym, categories: cats.slice(0, 1), size, competitions: multi(c[4]).join(", ").slice(0, 2000), items: multi(c[5]),
+        note: c.slice(6).filter(Boolean).join(", ").slice(0, 1000),
+        warn: [sw, cats.length > 1 && `only one category allowed, kept "${cats[0]}"`].filter(Boolean), skip: "" };
       const key = (name + "|" + gym).toLowerCase();
       if (!name) row.skip = "no name";
       else if (existing.has(key)) row.skip = "already in the list";
@@ -515,7 +517,7 @@
       if (r.competitions) li.append(el("span", "p-sub", "Competitions: " + r.competitions));
       if (r.items.length) li.append(el("span", "p-sub", "Items: " + r.items.join(", ")));
       if (r.note) li.append(el("span", "p-sub", "Note: " + r.note));
-      for (const w of r.warn) li.append(el("span", "p-sub warn", w + " (left blank)"));
+      for (const w of r.warn) li.append(el("span", "p-sub warn", w.startsWith("only one") ? w : w + " (left blank)"));
       ul.append(li);
     }
     if (bulkRows.length > 200) ul.append(el("li", "p-sub", `…and ${bulkRows.length - 200} more`));
@@ -560,7 +562,7 @@
     const q = $("qSearch").value.trim().toLowerCase(), g = $("qGym").value, cat = $("qCat").value;
     return people.filter((p) => (!g || p.gym === g) && (!cat || p.categories.includes(cat)) &&
       (!q || [p.name, p.gym, p.competitions, p.note].join(" ").toLowerCase().includes(q)))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
   }
 
   function render() {
@@ -610,7 +612,7 @@
     if (openId === p.id) {
       const d = el("div", "detail");
       const section = (label, rows, kind, onAdded) => {
-        const t = el("div", "qty-list"); t.append(...rows, addRow(kind, onAdded));
+        const t = el("div", "qty-list" + (kind === "cat" ? " single" : "")); t.append(...rows, addRow(kind, onAdded));
         d.append(el("div", "sec-lbl", label), t);
       };
       section("Category", categories.map((c) => checkRow(c, p.categories.includes(c), () => toggleCat(p, c))),
@@ -668,7 +670,10 @@
     th("#", "num"); if (withPhotos) th("", "ph"); th("Athlete"); th("Category"); th("Size", "c");
     for (const it of items) th(it.name, "c item");
     th("Competitions"); th("Note");
-    thead.append(hr); t.append(thead);
+    const cols = hr.children.length;
+    const spacer = (tag) => { const tr = el("tr", "rp-space"); const c = el(tag); c.colSpan = cols; tr.append(c); return tr; };
+    thead.append(spacer("th"), hr); t.append(thead);
+    const tfoot = el("tfoot"); tfoot.append(spacer("td")); t.append(tfoot);
     const tb = el("tbody");
     list.forEach((p, i) => {
       const tr = el("tr");

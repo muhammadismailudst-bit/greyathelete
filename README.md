@@ -42,9 +42,9 @@ Tap **⋯ → Bulk add** and paste one athlete per line (commas, or rows copied 
 
 ```
 Name, Gym, Category, Size, Competitions, Items, Note
-Ali Khan, Iron Gym, Qatari; Rx, M, SBX Series; Savageline, Hand band; T-shirt, paid
+Ali Khan, Iron Gym, Qatari, M, SBX Series; Savageline, Hand band; T-shirt, paid
 ```
-Only Name is required. Separate several categories, competitions or items with `;`. New category or item names are added to the lists. A header row and athletes already in the list (same name and gym) are skipped. Up to 500 at a time.
+Only Name is required. One category per athlete. Separate several competitions or items with `;`. New category or item names are added to the lists. A header row and athletes already in the list (same name and gym) are skipped. Up to 500 at a time.
 
 ## Photos and PDF
 - **Photos:** in Add/Edit, tap **Add photo**. The photo is cropped square and shrunk to about 480px before upload, then stored in the `photos` table.
