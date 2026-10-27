@@ -729,7 +729,7 @@
     }
     if (!shown.length) { const e = el("div", "empty"); e.append(el("b", null, "No matches"), el("span", null, "Try a different search or filter.")); list.append(e); return; }
     const ul = el("ul");
-    for (const p of shown) ul.append(personRow(p));
+    shown.forEach((p, i) => ul.append(personRow(p, i + 1)));
     list.append(ul);
   }
 
@@ -741,7 +741,7 @@
     return a;
   }
 
-  function personRow(p) {
+  function personRow(p, num) {
     const li = el("li", "person");
     const given = items.filter((i) => p.items[i.id]).length;
     const row = el("button", "row"); row.type = "button"; row.setAttribute("aria-expanded", String(openId === p.id));
@@ -750,7 +750,7 @@
     const who = el("div", "who");
     who.append(el("div", "name", p.name),
       el("div", "meta", [p.gym, p.nationality, p.categories.join(", "), p.size].filter(Boolean).join(" · ") || "—"));
-    row.append(avatar(p, initials), who,
+    row.append(el("span", "row-num", String(num)), avatar(p, initials), who,
       el("span", "score" + (items.length && given === items.length ? " full" : ""), `${given}/${items.length}`));
     row.addEventListener("click", () => { openId = openId === p.id ? null : p.id; armedDelete = null; render(); });
     li.append(row);

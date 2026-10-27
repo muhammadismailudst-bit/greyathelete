@@ -323,3 +323,9 @@ body[data-role="viewer"] .admin-only{display:none!important}
 .contact-chip .ic{width:15px;height:15px;margin:0}
 .contact-chip:active{background:var(--soft)}
 #qComp{grid-column:1/-1}
+
+/* Row numbers in the athlete list */
+.row-num{flex:none;min-width:22px;text-align:right;font-size:13px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+.row{gap:10px}
+.detail{padding-left:84px}
+@media (max-width:380px){.detail{padding-left:0}}
