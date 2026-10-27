@@ -1,5 +1,5 @@
 -- Kit Log v5: editable category list, competitions as a note, fixed item list, athlete photos.
--- Run after 004. Safe to run more than once. Categories part:
+-- Run after 004. Safe to run more than once.
 
 -- Competitions: a free-text note per person (replaces the race tick list).
 -- Races already ticked are copied in as text, once.
