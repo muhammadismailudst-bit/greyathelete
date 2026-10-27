@@ -626,6 +626,7 @@
     fillSelect($("qGym"), gyms.map((g) => [g, g]), "All gyms");
     fillSelect($("qCat"), categories.map((c) => [c, c]), "All categories");
     fillSelect($("qComp"), comps.map((c) => [c.id, c.name]), "All competitions");
+    syncFilterBtn();
     $("gymList").replaceChildren(...gyms.map((v) => new Option(v)));
 
     const shown = filtered();
@@ -697,6 +698,21 @@
   }
 
   for (const id of ["qSearch", "qGym", "qCat", "qComp"]) $(id).addEventListener("input", render);
+
+  // ---------- Filter panel ----------
+  const FILTERS = ["qCat", "qGym", "qComp"];
+  function syncFilterBtn() {
+    const n = FILTERS.filter((id) => $(id).value).length;
+    $("filterCount").textContent = String(n); $("filterCount").hidden = !n;
+    $("clearFilters").hidden = !n;
+    $("filterBtn").setAttribute("aria-label", n ? `Filters (${n} on)` : "Filters");
+  }
+  $("filterBtn").addEventListener("click", () => {
+    const open = $("filters").hidden;
+    $("filters").hidden = !open; $("filterBtn").setAttribute("aria-expanded", String(open));
+  });
+  $("clearFilters").addEventListener("click", () => { for (const id of FILTERS) $(id).value = ""; syncFilterBtn(); render(); });
+  for (const id of FILTERS) $(id).addEventListener("input", syncFilterBtn);
 
   // ---------- PDF report ----------
   // Builds a print-only page and opens the system print dialog ("Save as PDF" / Share → Save to Files).

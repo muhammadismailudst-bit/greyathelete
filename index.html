@@ -54,14 +54,21 @@
           <button class="add-btn" id="addBtn" type="button"><span aria-hidden="true">+</span> Add</button>
         </div>
       </div>
-      <div class="search">
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input id="qSearch" type="search" placeholder="Search athletes, gyms, competitions" aria-label="Search" autocomplete="off">
+      <div class="search-row">
+        <div class="search">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="qSearch" type="search" placeholder="Search athletes, gyms…" aria-label="Search" autocomplete="off">
+        </div>
+        <button class="filter-btn" id="filterBtn" type="button" aria-expanded="false" aria-controls="filters" aria-label="Filters">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+          <span class="filter-count" id="filterCount" hidden></span>
+        </button>
       </div>
-      <div class="filters">
+      <div class="filters" id="filters" hidden>
         <select id="qCat" aria-label="Filter by category"><option value="">All categories</option></select>
         <select id="qGym" aria-label="Filter by gym"><option value="">All gyms</option></select>
         <select id="qComp" aria-label="Filter by competition"><option value="">All competitions</option></select>
+        <button class="clear-filters" id="clearFilters" type="button" hidden>Clear filters</button>
       </div>
     </div>
   </header>
