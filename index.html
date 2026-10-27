@@ -57,6 +57,7 @@
       <div class="filters">
         <select id="qRace" aria-label="Filter by race"><option value="">All races</option></select>
         <select id="qGym" aria-label="Filter by gym"><option value="">All gyms</option></select>
+        <select id="qCat" aria-label="Filter by category"><option value="">All categories</option><option>Qatari</option><option>Rx</option><option>Girls</option><option>Master</option><option>Fan</option><option>Bartender</option></select>
       </div>
     </header>
 
@@ -79,10 +80,10 @@
     <div class="panel-body">
       <label class="field"><span class="lbl">Name</span><input id="fName" autocomplete="off" maxlength="80" placeholder="Full name"></label>
       <label class="field"><span class="lbl">Gym</span><input id="fGym" list="gymList" autocomplete="off" maxlength="80" placeholder="Gym name"></label>
-      <div class="field"><span class="lbl">Level</span><div class="seg" id="segLevel"></div></div>
+      <div class="field"><span class="lbl">Category · الفئة</span><div class="checklist tick-list" id="catChecklist"></div></div>
       <div class="field"><span class="lbl">T-shirt size</span><div class="seg" id="segSize"></div></div>
       <label class="field"><span class="lbl">Date</span><input id="fDate" type="date"></label>
-      <div class="field"><span class="lbl">Races done</span><div class="checklist" id="raceChecklist"></div></div>
+      <div class="field"><span class="lbl">Races done</span><div class="checklist tick-list" id="raceChecklist"></div></div>
       <div class="field"><span class="lbl">Items given</span><div class="checklist" id="checklist"></div></div>
       <label class="field"><span class="lbl">Note</span><textarea id="fNote" maxlength="1000" placeholder="Optional"></textarea></label>
       <div class="msg" id="formMsg" role="status"></div>
@@ -102,17 +103,17 @@
     <div class="panel-body">
       <div class="help">
         <p>One person per line. Separate columns with commas, or paste rows straight from Excel or Google Sheets.</p>
-        <p class="fmt">Name, Gym, Level, Size, Races, Items, Note</p>
+        <p class="fmt">Name, Gym, Category, Size, Races, Items, Note</p>
         <ul>
           <li>Only <b>Name</b> is required. Leave a column empty with <code>,,</code></li>
           <li>Several races or items: separate with <code>;</code></li>
           <li>Quantity: <code>T-shirt x2</code></li>
-          <li>Level: Beginner, Intermediate or Advanced. Size: XS to XXXL.</li>
+          <li>Category: Qatari, Rx, Girls, Master, Fan, Bartender (several with <code>;</code>). Size: XS to XXXL.</li>
           <li>New race or item names are added to your lists.</li>
           <li>A header row and people already in the list are skipped.</li>
         </ul>
-        <pre class="example" id="bulkExample">Ali Khan, Iron Gym, Beginner, M, Hyrox Dubai; T-100, Bag; T-shirt x2, paid
-Sara Ahmed, Fit Hub, Advanced, S, T-100, Head band; Bag; Medal,
+        <pre class="example" id="bulkExample">Ali Khan, Iron Gym, Qatari; Rx, M, Hyrox Dubai; T-100, Bag; T-shirt x2, paid
+Sara Ahmed, Fit Hub, Girls, S, T-100, Head band; Bag; Medal,
 Omar Y, Iron Gym, , L, , T-shirt, size to confirm</pre>
         <button type="button" class="btn-sm" id="bulkUseExample">Paste the example</button>
       </div>

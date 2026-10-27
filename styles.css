@@ -170,3 +170,20 @@ textarea{min-height:90px;resize:vertical}
 #checklist.checklist{border:0;border-radius:0;overflow:visible}
 #checklist .qty-row{border:1px solid var(--line);border-radius:12px;margin-top:6px}
 #checklist .qty-row:first-child{margin-top:0}
+
+/* Tick rows (categories, races) */
+.tick-list{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.check-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-top:1px solid var(--line);color:var(--muted);cursor:pointer}
+.check-row:first-child{border-top:0}
+.check-row.on{color:var(--fg);background:var(--good-soft)}
+.check-row.on .qty-name{font-weight:600}
+.check-row input{appearance:none;-webkit-appearance:none;width:26px;height:26px;border-radius:8px;border:2px solid var(--line);background:var(--bg);padding:0;flex:none;display:grid;place-items:center;cursor:pointer}
+.check-row input:checked{background:var(--good);border-color:var(--good)}
+.check-row input:checked::after{content:"";width:7px;height:12px;border:solid #fff;border-width:0 2.5px 2.5px 0;transform:translateY(-1px) rotate(45deg)}
+.check-row input:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.add-inline{display:flex;gap:8px;padding:8px;border-top:1px solid var(--line);background:var(--bg)}
+.add-inline:first-child{border-top:0}
+.add-inline input{padding:9px 12px;font-size:16px}
+.filters{grid-template-columns:1fr 1fr}
+#qCat{grid-column:1/-1}
+@media (min-width:560px){.filters{grid-template-columns:1fr 1fr 1fr}#qCat{grid-column:auto}}
