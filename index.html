@@ -3,10 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://*.supabase.co; img-src 'self' data:; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://*.supabase.co; img-src 'self' data: blob:; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#ffffff">
-<title>Grey Athlete Kit Log</title>
+<title>Grey Athletes</title>
+<link rel="icon" href="assets/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="styles.css?v=dev">
@@ -16,7 +17,7 @@
 <!-- Login -->
 <section class="login" id="loginView" hidden>
   <form class="login-box" id="loginForm" novalidate>
-    <h1>Kit Log</h1>
+    <h1 class="logo-h"><img class="logo login-logo" src="assets/logo.png" alt="Grey Athletes"></h1>
     <p class="muted">Enter the staff PIN</p>
     <input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="current-password" maxlength="12" aria-label="PIN">
     <button class="primary" id="loginBtn" type="submit">Unlock</button>
@@ -27,7 +28,7 @@
 <!-- Setup needed -->
 <section class="login" id="setupView" hidden>
   <div class="login-box">
-    <h1>Kit Log</h1>
+    <h1 class="logo-h"><img class="logo login-logo" src="assets/logo.png" alt="Grey Athletes"></h1>
     <p class="muted">This site isn't connected to its database yet. Fill in <b>config.js</b> with your Supabase project URL and anon key (see README).</p>
   </div>
 </section>
@@ -38,26 +39,26 @@
     <header class="pad">
       <div class="title-row">
         <div class="title-left">
-          <h1>Kit Log</h1>
+          <h1 class="logo-h"><img class="logo" src="assets/logo.png" alt="Grey Athletes"></h1>
           <span class="count" id="count"></span>
         </div>
         <div class="title-right">
           <div class="menu-wrap">
             <button class="icon-btn" id="menuBtn" type="button" aria-label="More" aria-haspopup="true" aria-expanded="false">⋯</button>
             <div class="menu" id="menu" role="menu" hidden>
+              <button type="button" role="menuitem" id="pdfBtn">Export PDF</button>
               <button type="button" role="menuitem" id="bulkBtn">Bulk add</button>
-              <button type="button" role="menuitem" id="manageBtn">Races &amp; items</button>
+              <button type="button" role="menuitem" id="manageBtn">Edit lists</button>
               <button type="button" role="menuitem" id="lockBtn">Lock</button>
             </div>
           </div>
           <button class="add-btn" id="addBtn" type="button">+ Add</button>
         </div>
       </div>
-      <input id="qSearch" type="search" placeholder="Search name, gym or note" aria-label="Search" autocomplete="off">
+      <input id="qSearch" type="search" placeholder="Search name, gym, competition or note" aria-label="Search" autocomplete="off">
       <div class="filters">
-        <select id="qRace" aria-label="Filter by race"><option value="">All races</option></select>
+        <select id="qCat" aria-label="Filter by category"><option value="">All categories</option></select>
         <select id="qGym" aria-label="Filter by gym"><option value="">All gyms</option></select>
-        <select id="qCat" aria-label="Filter by category"><option value="">All categories</option><option>Qatari</option><option>Rx</option><option>Girls</option><option>Master</option><option>Fan</option><option>Bartender</option></select>
       </div>
     </header>
 
@@ -66,7 +67,6 @@
       <div id="list"></div>
     </div>
   </div>
-
 </div>
 
 <!-- Add / edit sheet -->
@@ -74,20 +74,28 @@
   <form class="panel" id="form" novalidate>
     <div class="panel-head">
       <button type="button" class="link" id="closeBtn">Cancel</button>
-      <h2 id="sheetTitle">Add person</h2>
+      <h2 id="sheetTitle">Add athlete</h2>
       <button type="submit" class="link strong" id="saveBtn">Save</button>
     </div>
     <div class="panel-body">
+      <div class="photo-field">
+        <div class="photo-big" id="fPhotoPreview" aria-hidden="true"></div>
+        <div class="photo-actions">
+          <label class="btn-sm" for="fPhoto" id="fPhotoLabel">Add photo</label>
+          <input id="fPhoto" type="file" accept="image/*" class="visually-hidden">
+          <button type="button" class="btn-sm danger" id="fPhotoRemove" hidden>Remove</button>
+        </div>
+      </div>
       <label class="field"><span class="lbl">Name</span><input id="fName" autocomplete="off" maxlength="80" placeholder="Full name"></label>
       <label class="field"><span class="lbl">Gym</span><input id="fGym" list="gymList" autocomplete="off" maxlength="80" placeholder="Gym name"></label>
       <div class="field"><span class="lbl">Category · الفئة</span><div class="checklist tick-list" id="catChecklist"></div></div>
       <div class="field"><span class="lbl">T-shirt size</span><div class="seg" id="segSize"></div></div>
+      <div class="field"><span class="lbl">Items given</span><div class="checklist tick-list" id="checklist"></div></div>
+      <label class="field"><span class="lbl">Competitions</span><textarea id="fComp" maxlength="2000" placeholder="e.g. SBX Series 2026, Hyrox Doha"></textarea></label>
       <label class="field"><span class="lbl">Date</span><input id="fDate" type="date"></label>
-      <div class="field"><span class="lbl">Races done</span><div class="checklist tick-list" id="raceChecklist"></div></div>
-      <div class="field"><span class="lbl">Items given</span><div class="checklist" id="checklist"></div></div>
       <label class="field"><span class="lbl">Note</span><textarea id="fNote" maxlength="1000" placeholder="Optional"></textarea></label>
       <div class="msg" id="formMsg" role="status"></div>
-      <button type="button" class="btn-sm danger" id="deleteBtn" hidden>Delete person</button>
+      <button type="button" class="btn-sm danger" id="deleteBtn" hidden>Delete athlete</button>
     </div>
   </form>
 </div>
@@ -102,19 +110,18 @@
     </div>
     <div class="panel-body">
       <div class="help">
-        <p>One person per line. Separate columns with commas, or paste rows straight from Excel or Google Sheets.</p>
-        <p class="fmt">Name, Gym, Category, Size, Races, Items, Note</p>
+        <p>One athlete per line. Separate columns with commas, or paste rows straight from Excel or Google Sheets.</p>
+        <p class="fmt">Name, Gym, Category, Size, Competitions, Items, Note</p>
         <ul>
           <li>Only <b>Name</b> is required. Leave a column empty with <code>,,</code></li>
-          <li>Several races or items: separate with <code>;</code></li>
-          <li>Quantity: <code>T-shirt x2</code></li>
-          <li>Category: Qatari, Rx, Girls, Master, Fan, Bartender (several with <code>;</code>). Size: XS to XXXL.</li>
-          <li>New race or item names are added to your lists.</li>
-          <li>A header row and people already in the list are skipped.</li>
+          <li>Several categories, competitions or items: separate with <code>;</code></li>
+          <li>Size: XS to XXXL.</li>
+          <li>New category or item names are added to your lists.</li>
+          <li>A header row and athletes already in the list are skipped.</li>
         </ul>
-        <pre class="example" id="bulkExample">Ali Khan, Iron Gym, Qatari; Rx, M, Hyrox Dubai; T-100, Bag; T-shirt x2, paid
-Sara Ahmed, Fit Hub, Girls, S, T-100, Head band; Bag; Medal,
-Omar Y, Iron Gym, , L, , T-shirt, size to confirm</pre>
+        <pre class="example" id="bulkExample">Ali Khan, Iron Gym, Qatari; Rx, M, SBX Series; Savageline, Hand band; T-shirt, paid
+Sara Ahmed, Fit Hub, Girls, S, Hyrox Doha, Flag; Badge,
+Omar Y, Iron Gym, Fan, L, , T-shirt, size to confirm</pre>
         <button type="button" class="btn-sm" id="bulkUseExample">Paste the example</button>
       </div>
       <label class="field"><span class="lbl">Your list</span><textarea id="bulkText" class="bulk-text" placeholder="Paste or type here" spellcheck="false"></textarea></label>
@@ -124,27 +131,26 @@ Omar Y, Iron Gym, , L, , T-shirt, size to confirm</pre>
   </div>
 </div>
 
-<!-- Races & items sheet -->
+<!-- Lists sheet -->
 <div class="sheet" id="manage" hidden role="dialog" aria-modal="true" aria-labelledby="manageTitle">
   <div class="panel">
     <div class="panel-head">
       <span class="head-spacer"></span>
-      <h2 id="manageTitle">Races &amp; items</h2>
+      <h2 id="manageTitle">Edit lists</h2>
       <button type="button" class="link strong" id="manageClose">Done</button>
     </div>
     <div class="panel-body">
       <section class="field">
-        <span class="lbl">Races</span>
-        <form class="add-row" id="raceAdd" novalidate>
-          <input id="newRace" maxlength="60" placeholder="New race, e.g. Hyrox Dubai" autocomplete="off" aria-label="New race name">
-          <input id="newRaceDate" type="date" aria-label="Race date">
+        <span class="lbl">Categories · الفئة</span>
+        <form class="add-row add-row-2" id="catAdd" novalidate>
+          <input id="newCat" maxlength="40" placeholder="New category, e.g. Kids" autocomplete="off" aria-label="New category name">
           <button class="btn-sm dark" type="submit">Add</button>
         </form>
-        <ul class="manage-list" id="raceList"></ul>
+        <ul class="manage-list" id="catList"></ul>
       </section>
       <section class="field">
         <span class="lbl">Items</span>
-        <form class="add-row" id="itemAdd" novalidate>
+        <form class="add-row add-row-2" id="itemAdd" novalidate>
           <input id="newItem" maxlength="40" placeholder="New item, e.g. Medal" autocomplete="off" aria-label="New item name">
           <button class="btn-sm dark" type="submit">Add</button>
         </form>
@@ -154,6 +160,9 @@ Omar Y, Iron Gym, , L, , T-shirt, size to confirm</pre>
     </div>
   </div>
 </div>
+
+<!-- PDF report (shown only when printing) -->
+<div id="report" class="report" aria-hidden="true"></div>
 
 <datalist id="gymList"></datalist>
 <div class="toast" id="toast" role="status" hidden></div>
