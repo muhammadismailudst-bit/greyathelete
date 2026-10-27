@@ -197,7 +197,7 @@
       comps: Array.isArray(d.competitions) ? d.competitions.map(String) : [], photoTs: typeof d.photo === "string" ? d.photo : "",
       nationality: str(d.nationality, 40), phone: cleanPhone(d.phone), instagram: cleanInsta(d.instagram),
       name: str(d.name, 80) || "Unnamed", gym: str(d.gym, 80), categories: Array.isArray(d.categories) ? d.categories.map((c) => str(c, 40)).filter(Boolean) : [], size: str(d.size, 10),
-      date: str(d.date, 10), note: str(d.note, 1000), createdAt: Date.parse(d.created_at) || 0,
+      date: str(d.date, 10), note: str(d.note, 1000), createdAt: Date.parse(d.created_at) || 0, created: typeof d.created_at === "string" ? d.created_at : "",
     };
   }
 
@@ -699,7 +699,8 @@
     const q = $("qSearch").value.trim().toLowerCase(), g = $("qGym").value, cat = $("qCat").value, cm = $("qComp").value, nat = $("qNat").value;
     return people.filter((p) => (!g || p.gym === g) && (!cat || p.categories.includes(cat)) && (!cm || p.comps.includes(cm)) && (!nat || p.nationality === nat) &&
       (!q || [p.name, p.gym, p.nationality, p.phone, p.instagram, ...compNames(p), p.note].join(" ").toLowerCase().includes(q)))
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+      // First added on top. created_at keeps microseconds (Date.parse would drop them), so compare the text.
+      .sort((a, b) => (a.created < b.created ? -1 : a.created > b.created ? 1 : a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" })));
   }
 
   function render() {
