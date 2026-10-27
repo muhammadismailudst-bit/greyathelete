@@ -280,21 +280,26 @@ label.btn-sm{display:inline-flex;align-items:center}
 .tabs button[aria-selected="true"]{background:var(--on-ink);color:var(--ink)}
 
 /* ---------- Events ---------- */
-.ev{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--line)}
-.ev-date{flex:none;width:56px;height:60px;border-radius:12px;background:var(--ink);color:var(--on-ink);display:grid;place-content:center;text-align:center;line-height:1.05}
-.ev-date b{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
-.ev-date span{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);font-weight:600;margin-top:2px}
-.ev-body{flex:1;min-width:0;display:grid;gap:3px;justify-items:start}
-.ev-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;width:100%}
-.ev-title{margin:0;font-size:16px;font-weight:700;line-height:1.3;overflow-wrap:anywhere}
-.ev-when{flex:none;font-size:12px;font-weight:700;color:#8a6a43;background:#f6efe6;border-radius:999px;padding:3px 9px;white-space:nowrap}
-.ev-when.now{color:var(--good);background:var(--good-soft)}
-.ev-meta{font-size:14px;color:var(--fg)}
-.ev-loc{font-size:14px;color:var(--muted);padding-left:18px;position:relative;overflow-wrap:anywhere}
-.ev-loc::before{content:"";position:absolute;left:2px;top:4px;width:10px;height:10px;border:2px solid var(--muted);border-radius:50% 50% 50% 0;transform:rotate(-45deg)}
-.ev-details{margin:4px 0 0;font-size:14px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer;white-space:pre-wrap;overflow-wrap:anywhere}
+.ev-month{display:flex;align-items:baseline;justify-content:space-between;padding:22px 2px 8px;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--fg)}
+.ev-month small{font-size:12px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--muted)}
+#evList>.ev-month:first-child{padding-top:10px}
+.ev{position:relative;display:flex;gap:14px;padding:14px;margin-bottom:10px;background:var(--bg);border:1px solid var(--line);border-radius:16px;box-shadow:0 1px 2px rgba(17,20,24,.04)}
+.ev-date{flex:none;width:54px;align-self:flex-start;border-radius:12px;background:var(--ink);color:var(--on-ink);display:flex;flex-direction:column;align-items:center;padding:8px 0 7px;line-height:1.05}
+.ev-date b{font-size:21px;font-weight:700;font-variant-numeric:tabular-nums}
+.ev-date span{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);font-weight:700;margin-top:3px}
+.ev-date i{font-style:normal;font-size:10.5px;color:var(--on-ink-muted);margin-top:4px;white-space:nowrap}
+.ev-body{flex:1;min-width:0;display:grid;gap:4px;align-content:start;padding-right:28px}
+.ev-when{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#a3804f}
+.ev-when.now{color:var(--good)}
+.ev-title{margin:0 0 2px;font-size:15.5px;font-weight:700;line-height:1.3;overflow-wrap:anywhere}
+.ev-line{display:flex;align-items:flex-start;gap:7px;font-size:13.5px;color:var(--muted);line-height:1.35}
+.ev-line span{min-width:0;overflow-wrap:anywhere}
+.ic{width:15px;height:15px;flex:none;margin-top:1px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ev-details{margin:6px 0 0;padding-top:8px;border-top:1px dashed var(--line);font-size:13.5px;line-height:1.45;color:var(--fg);opacity:.8;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer;white-space:pre-wrap;overflow-wrap:anywhere}
 .ev-details.open{display:block}
-.ev-edit{margin-top:6px;padding:6px 14px;font-size:13px}
+.ev-edit{position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:10px;border:1px solid transparent;background:none;color:var(--muted);display:grid;place-items:center;cursor:pointer;padding:0}
+.ev-edit .ic{width:17px;height:17px;margin:0}
+.ev-edit:hover,.ev-edit:focus-visible{background:var(--soft);color:var(--fg)}
 .past-btn{display:block;margin:18px auto 6px;font:inherit;font-size:14px;font-weight:600;background:none;border:1px solid var(--line);border-radius:999px;padding:8px 16px;color:var(--muted);cursor:pointer}
 #evPast .ev{opacity:.6}
 .toggle-row{border:1px solid var(--line);border-radius:12px}

@@ -883,20 +883,43 @@
     return !q || [e.title, e.location, e.details].join(" ").toLowerCase().includes(q);
   }
 
+  // Small line icons (stroke uses currentColor).
+  const ICONS = {
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    pin: '<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+    pencil: '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/>',
+  };
+  function icon(name) {
+    const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("aria-hidden", "true"); s.classList.add("ic");
+    s.innerHTML = ICONS[name];   // fixed strings above, never user data
+    return s;
+  }
+  function metaLine(name, text) { const d = el("div", "ev-line"); d.append(icon(name), el("span", null, text)); return d; }
+
   function eventCard(e) {
     const c = el("article", "ev");
-    const a = dParts(e.starts_on);
+    const a = dParts(e.starts_on), b = e.ends_on ? dParts(e.ends_on) : null;
     const badge = el("div", "ev-date");
-    badge.append(el("b", null, e.ends_on && dParts(e.ends_on).m === a.m ? `${a.d}–${dParts(e.ends_on).d}` : String(a.d)), el("span", null, MONTHS[a.m - 1]));
+    badge.append(el("b", null, String(a.d)), el("span", null, MONTHS[a.m - 1]));
+    if (b) badge.append(el("i", null, "→ " + (b.m === a.m ? b.d : `${b.d} ${MONTHS[b.m - 1]}`)));
     const body = el("div", "ev-body");
-    const top = el("div", "ev-top");
-    top.append(el("h3", "ev-title", e.title));
-    const w = when(e); if (w) top.append(el("span", "ev-when" + (w === "Today" || w === "On now" ? " now" : ""), w));
-    body.append(top, el("div", "ev-meta", dateText(e)));
-    if (e.location) body.append(el("div", "ev-loc", e.location));
-    if (e.details) { const d = el("p", "ev-details", e.details); body.append(d); d.addEventListener("click", () => d.classList.toggle("open")); }
-    if (isAdmin()) body.append(btn("btn-sm ev-edit", "Edit", () => openEvSheet(e)));
+    const w = when(e);
+    if (w) body.append(el("div", "ev-when" + (w === "Today" || w === "On now" ? " now" : ""), w));
+    body.append(el("h3", "ev-title", e.title));
+    const [day, time] = dateText(e).split(" · ");
+    body.append(metaLine("clock", time === "All day" ? `${day} · All day` : `${day} · ${time}`));
+    if (e.location) body.append(metaLine("pin", e.location));
+    if (e.details) {
+      const d = el("p", "ev-details", e.details); d.title = "Tap to expand";
+      d.addEventListener("click", () => d.classList.toggle("open"));
+      body.append(d);
+    }
     c.append(badge, body);
+    if (isAdmin()) {
+      const ed = btn("ev-edit", null, () => openEvSheet(e)); ed.setAttribute("aria-label", "Edit " + e.title); ed.append(icon("pencil"));
+      c.append(ed);
+    }
     return c;
   }
 
@@ -918,7 +941,12 @@
       let month = "";
       for (const e of up) {
         const p = dParts(e.starts_on), key = `${p.y}-${p.m}`;
-        if (key !== month) { month = key; box.append(el("div", "group-head", new Date(Date.UTC(p.y, p.m - 1, 1)).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" }))); }
+        if (key !== month) {
+          month = key;
+          const n = up.filter((x) => x.starts_on.slice(0, 7) === e.starts_on.slice(0, 7)).length;
+          const h = el("div", "ev-month"); h.append(el("span", null, new Date(Date.UTC(p.y, p.m - 1, 1)).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" })), el("small", null, n + (n === 1 ? " event" : " events")));
+          box.append(h);
+        }
         box.append(eventCard(e));
       }
       $("pastBtn").hidden = !past.length;
