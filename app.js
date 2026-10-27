@@ -56,6 +56,8 @@
 
   // ---------- State ----------
   let people = [], items = [], categories = [], comps = [];   // comps: [{id, name}]
+  let events = [], evLoaded = false;   // [{id, title, starts_on, ends_on, start_time, end_time, location, details}]
+  let tab = "athletes", showPast = false, evEditingId = null, evArmedDelete = false;
   const photos = new Map();                 // personId -> { ts, data } (data URL)
   let editingId = null, openId = null, armedDelete = null;
   let size = "", formCats = new Set(), formItems = new Set(), formComps = new Set();
@@ -77,7 +79,8 @@
     if (callServer && token) rpc("logout", { p_token: token }).catch(() => {});
     saveToken(null);
     clearInterval(timer); timer = null;
-    people = []; items = []; categories = []; comps = []; photos.clear(); openId = null;
+    people = []; items = []; categories = []; comps = []; events = []; photos.clear(); openId = null;
+    closeEvSheet();
     closeSheet(); closeManage(); $("bulk").hidden = true;
     $("list").replaceChildren();
     $("pin").value = ""; $("loginMsg").textContent = "";
@@ -128,8 +131,9 @@
   async function load() {
     const seq = ++loadSeq;
     try {
-      const data = await call("list_all", {});
+      const [data, evs] = await Promise.all([call("list_all", {}), call("list_events", {}).catch((e) => { if (e.code === "locked") throw e; return null; })]);
       if (seq !== loadSeq) return;
+      if (Array.isArray(evs)) { events = evs.map(cleanEvent).filter(Boolean); evLoaded = true; }
       people = (Array.isArray(data && data.people) ? data.people : []).map(cleanPerson);
       items = (Array.isArray(data && data.items) ? data.items : []).map((i) => ({ id: String(i.id), name: str(i.name, 40) }));
       categories = (Array.isArray(data && data.categories) ? data.categories : []).map((c) => str(c, 40)).filter(Boolean);
@@ -137,6 +141,7 @@
       if (openId && !people.some((p) => p.id === openId)) openId = null;
       setStatus("");
       render();
+      renderEvents();
       if (!$("manage").hidden && !manageEditing) renderManage();
       loadPhotos();
     } catch (err) {
@@ -306,7 +311,7 @@
   }
   function closeSheet() { $("sheet").hidden = true; if ($("manage").hidden) document.body.classList.remove("locked"); editingId = null; }
 
-  $("addBtn").addEventListener("click", () => openSheet(null));
+  $("addBtn").addEventListener("click", () => (tab === "events" ? openEvSheet(null) : openSheet(null)));
   $("closeBtn").addEventListener("click", closeSheet);
   $("sheet").addEventListener("click", (e) => { if (e.target === $("sheet")) closeSheet(); });
   document.addEventListener("keydown", (e) => {
@@ -631,7 +636,7 @@
 
     const shown = filtered();
     const done = shown.filter((p) => items.length && items.every((i) => p.items[i.id])).length;
-    $("count").textContent = !people.length ? "" :
+    if (tab === "athletes") $("count").textContent = !people.length ? "" :
       (shown.length === people.length ? `${people.length} ${people.length === 1 ? "athlete" : "athletes"}` : `${shown.length} of ${people.length} athletes`) +
       (items.length ? ` · ${done} fully kitted` : "");
 
@@ -698,6 +703,7 @@
   }
 
   for (const id of ["qSearch", "qGym", "qCat", "qComp"]) $(id).addEventListener("input", render);
+  $("qSearch").addEventListener("input", () => renderEvents());
 
   // ---------- Filter panel ----------
   const FILTERS = ["qCat", "qGym", "qComp"];
@@ -771,6 +777,7 @@
   }
 
   $("pdfBtn").addEventListener("click", async () => {
+    if (tab === "events") { exportEvents(); return; }
     const list = filtered();
     if (!list.length) { toast("Nothing to export. Clear the filters or add athletes first."); return; }
     toast("Preparing PDF…");
@@ -783,6 +790,190 @@
     try { window.print(); } catch { toast("Printing isn't available here. Open the site in Safari or Chrome."); }
     setTimeout(() => { document.title = oldTitle; }, 1000);
   });
+
+  // ---------- Events ----------
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const isTime = (t) => /^\d{2}:\d{2}$/.test(t || "");
+  function cleanEvent(e) {
+    if (!e || !isDate(e.starts_on)) return null;
+    return { id: String(e.id), title: str(e.title, 120) || "Untitled", starts_on: e.starts_on,
+      ends_on: isDate(e.ends_on) ? e.ends_on : "", start_time: isTime(e.start_time) ? e.start_time : "",
+      end_time: isTime(e.end_time) ? e.end_time : "", location: str(e.location, 200), details: str(e.details, 4000) };
+  }
+  const lastDay = (e) => e.ends_on || e.starts_on;
+  const dayDiff = (a, b) => Math.round((Date.parse(a + "T00:00:00Z") - Date.parse(b + "T00:00:00Z")) / 864e5);
+  const dParts = (d) => { const [y, m, dd] = d.split("-").map(Number); return { y, m, d: dd }; };
+  function when(e) {
+    const t = today();
+    if (e.starts_on <= t && lastDay(e) >= t) return e.starts_on === lastDay(e) ? "Today" : "On now";
+    const n = dayDiff(e.starts_on, t);
+    if (n === 1) return "Tomorrow";
+    if (n > 1 && n < 7) return `In ${n} days`;
+    if (n >= 7 && n < 28) return `In ${Math.round(n / 7)} week${Math.round(n / 7) === 1 ? "" : "s"}`;
+    return "";
+  }
+  function dateText(e) {
+    const a = dParts(e.starts_on), b = e.ends_on ? dParts(e.ends_on) : null;
+    const wd = (d) => new Date(Date.UTC(d.y, d.m - 1, d.d)).toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" });
+    const yr = (d) => (d.y !== new Date().getFullYear() ? " " + d.y : "");
+    let s1 = `${wd(a)} ${a.d} ${MONTHS[a.m - 1]}` + (b && b.y === a.y ? "" : yr(a));
+    if (b) s1 += ` – ${wd(b)} ${b.d} ${MONTHS[b.m - 1]}${yr(b)}`;
+    const time = e.start_time ? e.start_time + (e.end_time ? "–" + e.end_time : "") : "All day";
+    return `${s1} · ${time}`;
+  }
+  function evMatches(e) {
+    const q = $("qSearch").value.trim().toLowerCase();
+    return !q || [e.title, e.location, e.details].join(" ").toLowerCase().includes(q);
+  }
+
+  function eventCard(e) {
+    const c = el("article", "ev");
+    const a = dParts(e.starts_on);
+    const badge = el("div", "ev-date");
+    badge.append(el("b", null, e.ends_on && dParts(e.ends_on).m === a.m ? `${a.d}–${dParts(e.ends_on).d}` : String(a.d)), el("span", null, MONTHS[a.m - 1]));
+    const body = el("div", "ev-body");
+    const top = el("div", "ev-top");
+    top.append(el("h3", "ev-title", e.title));
+    const w = when(e); if (w) top.append(el("span", "ev-when" + (w === "Today" || w === "On now" ? " now" : ""), w));
+    body.append(top, el("div", "ev-meta", dateText(e)));
+    if (e.location) body.append(el("div", "ev-loc", e.location));
+    if (e.details) { const d = el("p", "ev-details", e.details); body.append(d); d.addEventListener("click", () => d.classList.toggle("open")); }
+    const edit = btn("btn-sm ev-edit", "Edit", () => openEvSheet(e));
+    body.append(edit);
+    c.append(badge, body);
+    return c;
+  }
+
+  function renderEvents() {
+    if (tab === "events") {
+      const t = today();
+      const list = events.filter(evMatches);
+      const up = list.filter((e) => lastDay(e) >= t), past = list.filter((e) => lastDay(e) < t).reverse();
+      const next = up[0];
+      $("count").textContent = !evLoaded ? "" : `${up.length} upcoming ${up.length === 1 ? "event" : "events"}` + (next ? ` · next ${(when(next) || "on " + dateText(next).split(" · ")[0]).replace(/^In /, "in ").replace(/^Today$/, "today").replace(/^Tomorrow$/, "tomorrow").replace(/^On now$/, "on now")}` : "");
+      const box = $("evList"); box.replaceChildren();
+      if (!evLoaded) {
+        const e = el("div", "empty"); e.append(el("b", null, "Events aren't set up yet"), el("span", null, "The database needs its events update first."));
+        box.append(e);
+      } else if (!up.length) {
+        const e = el("div", "empty"); e.append(el("b", null, list.length < events.length ? "No matching events" : "No upcoming events"), el("span", null, "Tap + Add to add one."));
+        box.append(e);
+      }
+      let month = "";
+      for (const e of up) {
+        const p = dParts(e.starts_on), key = `${p.y}-${p.m}`;
+        if (key !== month) { month = key; box.append(el("div", "group-head", new Date(Date.UTC(p.y, p.m - 1, 1)).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" }))); }
+        box.append(eventCard(e));
+      }
+      $("pastBtn").hidden = !past.length;
+      $("pastBtn").textContent = showPast ? "Hide past events" : `Show past events (${past.length})`;
+      const pb = $("evPast"); pb.hidden = !showPast || !past.length; pb.replaceChildren(...(showPast ? past.map(eventCard) : []));
+    }
+    $("locList").replaceChildren(...[...new Set(events.map((e) => e.location).filter(Boolean))].sort().map((v) => new Option(v)));
+  }
+  $("pastBtn").addEventListener("click", () => { showPast = !showPast; renderEvents(); });
+
+  // Tabs
+  function setTab(next) {
+    tab = next;
+    try { localStorage.setItem("kitlog.tab", tab); } catch { /* ignore */ }
+    $("tabAthletes").setAttribute("aria-selected", String(tab === "athletes"));
+    $("tabEvents").setAttribute("aria-selected", String(tab === "events"));
+    $("athletesView").hidden = tab !== "athletes";
+    $("eventsView").hidden = tab !== "events";
+    $("filterBtn").hidden = tab !== "athletes";
+    if (tab !== "athletes") { $("filters").hidden = true; $("filterBtn").setAttribute("aria-expanded", "false"); }
+    $("qSearch").placeholder = tab === "events" ? "Search events, places…" : "Search athletes, gyms…";
+    $("addBtn").setAttribute("aria-label", tab === "events" ? "Add event" : "Add athlete");
+    if (tab === "athletes") render(); else renderEvents();
+  }
+  $("tabAthletes").addEventListener("click", () => setTab("athletes"));
+  $("tabEvents").addEventListener("click", () => setTab("events"));
+  try { if (localStorage.getItem("kitlog.tab") === "events") setTab("events"); } catch { /* ignore */ }
+
+  // Event form
+  function syncAllDay() { $("eTimes").hidden = $("eAllDay").checked; }
+  $("eAllDay").addEventListener("change", syncAllDay);
+  function openEvSheet(e) {
+    if (!evLoaded) { toast("Events aren't set up in the database yet."); return; }
+    evEditingId = e ? e.id : null; evArmedDelete = false;
+    $("evTitle").textContent = e ? "Edit event" : "Add event";
+    $("eTitle").value = e ? e.title : "";
+    $("eStart").value = e ? e.starts_on : today();
+    $("eEnd").value = e ? e.ends_on : "";
+    $("eAllDay").checked = e ? !e.start_time : true;
+    $("eStartTime").value = e ? e.start_time : "";
+    $("eEndTime").value = e ? e.end_time : "";
+    $("eLocation").value = e ? e.location : "";
+    $("eDetails").value = e ? e.details : "";
+    $("evDelete").hidden = !e; $("evDelete").textContent = "Delete event";
+    $("evMsg").textContent = "";
+    syncAllDay();
+    $("toast").hidden = true;
+    $("evSheet").hidden = false; document.body.classList.add("locked");
+    if (!e) setTimeout(() => $("eTitle").focus(), 50);
+  }
+  function closeEvSheet() { $("evSheet").hidden = true; evEditingId = null; if ($("sheet").hidden && $("manage").hidden && $("bulk").hidden) document.body.classList.remove("locked"); }
+  $("evClose").addEventListener("click", closeEvSheet);
+  $("evSheet").addEventListener("click", (e) => { if (e.target === $("evSheet")) closeEvSheet(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("evSheet").hidden) closeEvSheet(); });
+
+  $("evForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const allDay = $("eAllDay").checked;
+    const data = {
+      title: str($("eTitle").value, 120), starts_on: $("eStart").value, ends_on: isDate($("eEnd").value) ? $("eEnd").value : "",
+      start_time: !allDay && isTime($("eStartTime").value) ? $("eStartTime").value : "",
+      end_time: !allDay && isTime($("eEndTime").value) ? $("eEndTime").value : "",
+      location: str($("eLocation").value, 200), details: str($("eDetails").value, 4000),
+    };
+    if (!data.title) { $("evMsg").textContent = "Enter the event name."; $("eTitle").focus(); return; }
+    if (!isDate(data.starts_on)) { $("evMsg").textContent = "Pick a date."; $("eStart").focus(); return; }
+    if (data.ends_on && data.ends_on < data.starts_on) { $("evMsg").textContent = "The end date is before the start date."; $("eEnd").focus(); return; }
+    if (!allDay && !data.start_time) { $("evMsg").textContent = "Pick a start time, or switch on All day."; $("eStartTime").focus(); return; }
+    const b = $("evSave"); b.disabled = true;
+    try {
+      await call("save_event", { p_id: evEditingId, p_data: data });
+      toast((evEditingId ? "Saved " : "Added ") + data.title);
+      closeEvSheet(); load();
+    } catch (err) { if (err.code !== "locked") $("evMsg").textContent = errorText(err); }
+    finally { b.disabled = false; }
+  });
+  $("evDelete").addEventListener("click", async () => {
+    if (!evArmedDelete) { evArmedDelete = true; $("evDelete").textContent = "Tap again to delete"; return; }
+    try { await call("delete_event", { p_id: evEditingId }); toast("Deleted"); closeEvSheet(); load(); }
+    catch (err) { if (err.code !== "locked") $("evMsg").textContent = errorText(err); }
+  });
+
+  // Events PDF
+  function exportEvents() {
+    const t = today();
+    const list = events.filter(evMatches).filter((e) => showPast || lastDay(e) >= t);
+    if (!list.length) { toast("No events to export."); return; }
+    const r = $("report"); r.replaceChildren();
+    const head = el("div", "rp-head");
+    const logo = new Image(); logo.src = "assets/logo.png"; logo.alt = "Grey Athletes"; logo.className = "rp-logo";
+    const meta = el("div", "rp-meta");
+    meta.append(el("div", "rp-title", "Upcoming events"), el("div", "rp-sub", new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) + ` · ${list.length} ${list.length === 1 ? "event" : "events"}`));
+    head.append(logo, meta); r.append(head);
+    const tbl = el("table", "rp-table"), thead = el("thead"), hr = el("tr");
+    for (const [txt, cls] of [["Date"], ["Time", "c"], ["Event"], ["Location"], ["Details"]]) hr.append(el("th", cls || null, txt));
+    const spacer = (tag) => { const tr = el("tr", "rp-space"); const c = el(tag); c.colSpan = 5; tr.append(c); return tr; };
+    thead.append(spacer("th"), hr); tbl.append(thead);
+    const tb = el("tbody");
+    for (const e of list) {
+      const tr = el("tr");
+      const [d, tm] = dateText(e).split(" · ");
+      tr.append(el("td", "nowrap", d), el("td", "c nowrap", tm), el("td", "who", e.title), el("td", null, e.location), el("td", "txt", e.details));
+      tb.append(tr);
+    }
+    const tf = el("tfoot"); tf.append(spacer("td"));
+    tbl.append(tb, tf); r.append(tbl);
+    r.append(el("div", "rp-foot", "Grey Athletes · generated " + new Date().toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })));
+    const oldTitle = document.title; document.title = "Grey Athletes - events - " + today();
+    const go = () => { try { window.print(); } catch { toast("Printing isn't available here. Open the site in Safari or Chrome."); } setTimeout(() => { document.title = oldTitle; }, 1000); };
+    logo.complete ? go() : (logo.onload = logo.onerror = go);
+  }
 
   // ---------- Header menu ----------
   function setMenu(open) { $("menu").hidden = !open; $("menuBtn").setAttribute("aria-expanded", String(open)); }

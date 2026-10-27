@@ -49,3 +49,6 @@ Only Name is required. One category per athlete. Separate several competitions o
 ## Photos and PDF
 - **Photos:** in Add/Edit, tap **Add photo**. The photo is cropped square and shrunk to about 480px before upload, then stored in the `photos` table.
 - **Export PDF:** **⋯ → Export PDF** prints the athletes currently shown (search and filters apply) as an A4 landscape report with the logo, item ticks and totals. On iPhone the print sheet has **Save to Files** / **Share**. It needs Safari or Chrome; in-app browsers such as WhatsApp's may not print.
+
+## Events
+The **Events** tab lists upcoming events by month, with the date, time (or all day), location and details. Tap **+ Add** on that tab to add one; **Edit** on a card changes or deletes it. **⋯ → Export PDF** on the Events tab prints the event list. The first 13 events were imported from the "Grey Events" Google Calendar (supabase/008_events.sql).
