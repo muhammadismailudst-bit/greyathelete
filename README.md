@@ -49,3 +49,21 @@ Only Name is required. One category per athlete. Separate several competitions o
 ## Photos and PDF
 - **Photos:** in Add/Edit, tap **Add photo**. The photo is cropped square and shrunk to about 480px before upload, then stored in the `photos` table.
 - **Export PDF:** **⋯ → Export PDF** prints the athletes currently shown (search and filters apply) as an A4 landscape report with the logo, item ticks and totals. On iPhone the print sheet has **Save to Files** / **Share**. It needs Safari or Chrome; in-app browsers such as WhatsApp's may not print.
+
+## Events
+The **Events** tab lists upcoming events by month, with the date, time (or all day), location and details. Tap **+ Add** on that tab to add one; **Edit** on a card changes or deletes it. **⋯ → Export PDF** on the Events tab prints the event list. The first 13 events were imported from the "Grey Events" Google Calendar (supabase/008_events.sql).
+
+## Google sign-in and roles (supabase/009_google_login.sql)
+Staff sign in with Google; the PIN is retired. Roles live in `app_users` and are enforced in the database:
+- **admin**: everything, including **⋯ → Team & access** to add people by Gmail address.
+- **viewer**: the Events tab only, read-only.
+A Google account that isn't on the team sees "No access yet".
+
+One-time setup (before running 009):
+1. Google Cloud Console → new project → **OAuth consent screen** (External, app name, support email) → **Publish app**.
+2. **Credentials → Create credentials → OAuth client ID → Web application**.
+   - Authorized JavaScript origins: `https://muhammadismailudst-bit.github.io`
+   - Authorized redirect URIs: `https://gjrsjygtlnlqovjulnrq.supabase.co/auth/v1/callback`
+3. Supabase → **Authentication → Sign In / Providers → Google**: enable, paste Client ID and Client Secret, save.
+4. Supabase → **Authentication → URL Configuration**: Site URL and Redirect URLs = `https://muhammadismailudst-bit.github.io/greyathelete/`
+5. Run `supabase/009_google_login.sql` in the SQL Editor.

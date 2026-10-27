@@ -2,7 +2,7 @@
   "use strict";
 
   const SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
-  const TOKEN_KEY = "kitlog.token";
+  const AUTH_KEY = "kitlog.auth";
   const REFRESH_MS = 30000;
 
   const $ = (id) => document.getElementById(id);
@@ -19,30 +19,75 @@
   const KEY = str(cfg.supabaseKey, 2000);
   const configured = /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(BASE) && KEY.length > 20;
 
-  // ---------- Session token ----------
-  let token = null;
-  try { token = localStorage.getItem(TOKEN_KEY); } catch { /* storage blocked */ }
-  function saveToken(t) {
-    token = t;
-    try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
+  // ---------- Google sign-in (Supabase Auth, no library) ----------
+  // auth = { access_token, refresh_token, expires_at (unix seconds) }, kept in this browser only.
+  let auth = null, role = null, myEmail = "";
+  try { auth = JSON.parse(localStorage.getItem(AUTH_KEY) || "null"); } catch { auth = null; }
+  try { localStorage.removeItem("kitlog.token"); } catch { /* old PIN session */ }
+  function saveAuth(a) {
+    auth = a && typeof a.access_token === "string" && typeof a.refresh_token === "string" ? a : null;
+    try { auth ? localStorage.setItem(AUTH_KEY, JSON.stringify(auth)) : localStorage.removeItem(AUTH_KEY); } catch { /* ignore */ }
+  }
+  // Coming back from Google: tokens (or an error) arrive in the URL fragment.
+  let authError = "";
+  (function readRedirect() {
+    if (!location.hash || location.hash.length < 2) return;
+    const h = new URLSearchParams(location.hash.slice(1));
+    if (h.get("access_token") && h.get("refresh_token")) {
+      saveAuth({ access_token: h.get("access_token"), refresh_token: h.get("refresh_token"),
+        expires_at: Number(h.get("expires_at")) || Math.floor(Date.now() / 1000) + (Number(h.get("expires_in")) || 3600) });
+    } else if (h.get("error")) {
+      authError = h.get("error_description") || h.get("error");
+    } else return;
+    history.replaceState(null, "", location.pathname + location.search);   // keep tokens out of the address bar
+  })();
+
+  function signIn() {
+    const back = location.origin + location.pathname;
+    location.assign(`${BASE}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(back)}`);
+  }
+  let refreshing = null;
+  async function accessToken() {
+    if (!auth) return null;
+    if (auth.expires_at - 60 > Date.now() / 1000) return auth.access_token;
+    if (!refreshing) refreshing = (async () => {
+      try {
+        const res = await fetch(`${BASE}/auth/v1/token?grant_type=refresh_token`, {
+          method: "POST", headers: { "Content-Type": "application/json", apikey: KEY }, body: JSON.stringify({ refresh_token: auth.refresh_token }) });
+        if (res.status === 400 || res.status === 401) { saveAuth(null); return null; }
+        if (!res.ok) throw new Error("refresh");
+        const t = await res.json();
+        saveAuth({ access_token: t.access_token, refresh_token: t.refresh_token, expires_at: t.expires_at || Math.floor(Date.now() / 1000) + (t.expires_in || 3600) });
+        return auth && auth.access_token;
+      } catch { throw Object.assign(new Error("offline"), { code: "offline" }); }
+      finally { refreshing = null; }
+    })();
+    return refreshing;
   }
 
   // ---------- API ----------
   async function rpc(fn, args) {
     const headers = { "Content-Type": "application/json", apikey: KEY };
-    if (KEY.startsWith("eyJ")) headers.Authorization = "Bearer " + KEY;
+    const t = await accessToken();
+    if (t) headers.Authorization = "Bearer " + t;
+    else if (KEY.startsWith("eyJ")) headers.Authorization = "Bearer " + KEY;
     let res;
     try { res = await fetch(`${BASE}/rest/v1/rpc/${fn}`, { method: "POST", headers, body: JSON.stringify(args) }); }
     catch { throw Object.assign(new Error("offline"), { code: "offline" }); }
     const text = await res.text();
     let body = null; try { body = text ? JSON.parse(text) : null; } catch { body = null; }
-    if (!res.ok) { const msg = (body && body.message) || "request_failed"; throw Object.assign(new Error(msg), { code: msg }); }
+    if (!res.ok) {
+      let msg = (body && body.message) || "request_failed";
+      if (res.status === 401 || /JWT/i.test(msg)) msg = "not_logged_in";
+      throw Object.assign(new Error(msg), { code: msg });
+    }
     return body;
   }
   async function call(fn, args) {
-    try { return await rpc(fn, { p_token: token, ...args }); }
+    try { return await rpc(fn, { p_token: null, ...args }); }
     catch (err) {
-      if (err.code === "not_logged_in") { lock(false); throw Object.assign(new Error("locked"), { code: "locked" }); }
+      if (err.code === "not_logged_in") { signOut(false); throw Object.assign(new Error("locked"), { code: "locked" }); }
+      if (err.code === "no_access") { showNoAccess(); throw Object.assign(new Error("locked"), { code: "locked" }); }
       throw err;
     }
   }
@@ -51,11 +96,16 @@
     if (c === "offline") return "No connection. Check your internet and try again.";
     if (c === "not_found") return "That was already deleted by someone else.";
     if (c === "duplicate_name") return "That name is already in the list.";
+    if (c === "not_allowed") return "Only admins can do that.";
+    if (c === "bad_email") return "That doesn't look like an email address.";
+    if (c === "last_admin") return "There must always be at least one admin.";
     return "Couldn't save. Try again.";
   }
 
   // ---------- State ----------
   let people = [], items = [], categories = [], comps = [];   // comps: [{id, name}]
+  let events = [], evLoaded = false;   // [{id, title, starts_on, ends_on, start_time, end_time, location, details}]
+  let tab = "athletes", showPast = false, evEditingId = null, evArmedDelete = false;
   const photos = new Map();                 // personId -> { ts, data } (data URL)
   let editingId = null, openId = null, armedDelete = null;
   let size = "", formCats = new Set(), formItems = new Set(), formComps = new Set();
@@ -69,49 +119,59 @@
   function show(view) {
     $("setupView").hidden = view !== "setup";
     $("loginView").hidden = view !== "login";
+    $("noAccessView").hidden = view !== "noaccess";
     $("appView").hidden = view !== "app";
   }
   function setStatus(text) { $("status").textContent = text; $("status").hidden = !text; }
 
-  function lock(callServer) {
-    if (callServer && token) rpc("logout", { p_token: token }).catch(() => {});
-    saveToken(null);
+  function resetState() {
     clearInterval(timer); timer = null;
-    people = []; items = []; categories = []; comps = []; photos.clear(); openId = null;
-    closeSheet(); closeManage(); $("bulk").hidden = true;
-    $("list").replaceChildren();
-    $("pin").value = ""; $("loginMsg").textContent = "";
-    show("login");
-    setTimeout(() => $("pin").focus(), 50);
+    people = []; items = []; categories = []; comps = []; events = []; evLoaded = false; photos.clear(); openId = null;
+    role = null; myEmail = ""; document.body.dataset.role = "";
+    closeEvSheet(); closeSheet(); closeManage(); closeTeam(); $("bulk").hidden = true;
+    $("list").replaceChildren(); $("evList").replaceChildren();
   }
+  async function signOut(callServer) {
+    if (callServer && auth) {
+      const t = auth.access_token;
+      fetch(`${BASE}/auth/v1/logout`, { method: "POST", headers: { apikey: KEY, Authorization: "Bearer " + t } }).catch(() => {});
+    }
+    saveAuth(null); resetState();
+    $("loginMsg").textContent = authError ? "Google sign-in didn't finish: " + authError : "";
+    show("login");
+  }
+  function showNoAccess() {
+    const email = myEmail;
+    resetState();
+    $("noAccessEmail").textContent = email || "this Google account";
+    show("noaccess");
+  }
+  $("signInBtn").addEventListener("click", signIn);
+  $("noAccessSignOut").addEventListener("click", () => signOut(true));
+  $("lockBtn").addEventListener("click", () => signOut(true));
 
   async function unlocked() {
-    show("app"); setStatus("Loading…");
+    setStatus("Loading…");
+    let me;
+    try { me = await call("my_access", {}); }
+    catch (err) {
+      if (err.code === "locked") return;
+      show("app"); setStatus(err.code === "offline" ? "No connection. Check your internet and reopen the app." : "Couldn't check your access. Reopen the app to retry.");
+      return;
+    }
+    myEmail = str(me && me.email, 200);
+    role = me && (me.role === "admin" || me.role === "viewer") ? me.role : null;
+    if (!role) { showNoAccess(); return; }
+    document.body.dataset.role = role;
+    $("whoami").textContent = myEmail;
+    show("app");
+    let saved = "athletes"; try { saved = localStorage.getItem("kitlog.tab") || "athletes"; } catch { /* ignore */ }
+    setTab(role === "admin" ? saved : "events");
     await load();
     clearInterval(timer);
     timer = setInterval(() => { if (document.visibilityState === "visible") load(); }, REFRESH_MS);
   }
-
-  // ---------- Login ----------
-  $("loginForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const pin = $("pin").value.trim();
-    if (!/^[0-9]{6,12}$/.test(pin)) { $("loginMsg").textContent = "The PIN is 6 to 12 digits."; return; }
-    const b = $("loginBtn"); b.disabled = true; $("loginMsg").textContent = "";
-    try {
-      const r = await rpc("login", { p_pin: pin });
-      if (r && r.token) { saveToken(r.token); $("pin").value = ""; await unlocked(); return; }
-      const e2 = r && r.error;
-      $("loginMsg").textContent =
-        e2 === "wrong_pin" ? "Wrong PIN." :
-        e2 === "too_many_attempts" ? "Too many wrong tries. Wait 10 minutes and try again." :
-        e2 === "pin_not_set" ? "No PIN has been set yet." : "Couldn't log in. Try again.";
-      $("pin").select();
-    } catch (err) {
-      $("loginMsg").textContent = err.code === "offline" ? "No connection. Check your internet." : "Couldn't log in. Try again.";
-    } finally { b.disabled = false; }
-  });
-  $("lockBtn").addEventListener("click", () => lock(true));
+  const isAdmin = () => role === "admin";
 
   // ---------- Data ----------
   function cleanPerson(d) {
@@ -128,8 +188,9 @@
   async function load() {
     const seq = ++loadSeq;
     try {
-      const data = await call("list_all", {});
+      const [data, evs] = await Promise.all([isAdmin() ? call("list_all", {}) : Promise.resolve({}), call("list_events", {}).catch((e) => { if (e.code === "locked") throw e; return null; })]);
       if (seq !== loadSeq) return;
+      if (Array.isArray(evs)) { events = evs.map(cleanEvent).filter(Boolean); evLoaded = true; }
       people = (Array.isArray(data && data.people) ? data.people : []).map(cleanPerson);
       items = (Array.isArray(data && data.items) ? data.items : []).map((i) => ({ id: String(i.id), name: str(i.name, 40) }));
       categories = (Array.isArray(data && data.categories) ? data.categories : []).map((c) => str(c, 40)).filter(Boolean);
@@ -137,8 +198,9 @@
       if (openId && !people.some((p) => p.id === openId)) openId = null;
       setStatus("");
       render();
+      renderEvents();
       if (!$("manage").hidden && !manageEditing) renderManage();
-      loadPhotos();
+      if (isAdmin()) loadPhotos();
     } catch (err) {
       if (err.code === "locked") return;
       if (seq === loadSeq) setStatus(err.code === "offline" ? "Offline. Showing the last loaded list." : "Couldn't load the list. Reopen the app to retry.");
@@ -166,7 +228,7 @@
     finally { photoBusy = false; }
   }
 
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && token && !$("appView").hidden) load(); });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && auth && role && !$("appView").hidden) load(); });
 
   // ---------- Toast ----------
   function toast(text) {
@@ -306,7 +368,7 @@
   }
   function closeSheet() { $("sheet").hidden = true; if ($("manage").hidden) document.body.classList.remove("locked"); editingId = null; }
 
-  $("addBtn").addEventListener("click", () => openSheet(null));
+  $("addBtn").addEventListener("click", () => { if (!isAdmin()) return; tab === "events" ? openEvSheet(null) : openSheet(null); });
   $("closeBtn").addEventListener("click", closeSheet);
   $("sheet").addEventListener("click", (e) => { if (e.target === $("sheet")) closeSheet(); });
   document.addEventListener("keydown", (e) => {
@@ -631,7 +693,7 @@
 
     const shown = filtered();
     const done = shown.filter((p) => items.length && items.every((i) => p.items[i.id])).length;
-    $("count").textContent = !people.length ? "" :
+    if (tab === "athletes") $("count").textContent = !people.length ? "" :
       (shown.length === people.length ? `${people.length} ${people.length === 1 ? "athlete" : "athletes"}` : `${shown.length} of ${people.length} athletes`) +
       (items.length ? ` · ${done} fully kitted` : "");
 
@@ -698,6 +760,7 @@
   }
 
   for (const id of ["qSearch", "qGym", "qCat", "qComp"]) $(id).addEventListener("input", render);
+  $("qSearch").addEventListener("input", () => renderEvents());
 
   // ---------- Filter panel ----------
   const FILTERS = ["qCat", "qGym", "qComp"];
@@ -771,6 +834,7 @@
   }
 
   $("pdfBtn").addEventListener("click", async () => {
+    if (tab === "events") { exportEvents(); return; }
     const list = filtered();
     if (!list.length) { toast("Nothing to export. Clear the filters or add athletes first."); return; }
     toast("Preparing PDF…");
@@ -784,6 +848,234 @@
     setTimeout(() => { document.title = oldTitle; }, 1000);
   });
 
+  // ---------- Events ----------
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const isTime = (t) => /^\d{2}:\d{2}$/.test(t || "");
+  function cleanEvent(e) {
+    if (!e || !isDate(e.starts_on)) return null;
+    return { id: String(e.id), title: str(e.title, 120) || "Untitled", starts_on: e.starts_on,
+      ends_on: isDate(e.ends_on) ? e.ends_on : "", start_time: isTime(e.start_time) ? e.start_time : "",
+      end_time: isTime(e.end_time) ? e.end_time : "", location: str(e.location, 200), details: str(e.details, 4000) };
+  }
+  const lastDay = (e) => e.ends_on || e.starts_on;
+  const dayDiff = (a, b) => Math.round((Date.parse(a + "T00:00:00Z") - Date.parse(b + "T00:00:00Z")) / 864e5);
+  const dParts = (d) => { const [y, m, dd] = d.split("-").map(Number); return { y, m, d: dd }; };
+  function when(e) {
+    const t = today();
+    if (e.starts_on <= t && lastDay(e) >= t) return e.starts_on === lastDay(e) ? "Today" : "On now";
+    const n = dayDiff(e.starts_on, t);
+    if (n === 1) return "Tomorrow";
+    if (n > 1 && n < 7) return `In ${n} days`;
+    if (n >= 7 && n < 28) return `In ${Math.round(n / 7)} week${Math.round(n / 7) === 1 ? "" : "s"}`;
+    return "";
+  }
+  function dateText(e) {
+    const a = dParts(e.starts_on), b = e.ends_on ? dParts(e.ends_on) : null;
+    const wd = (d) => new Date(Date.UTC(d.y, d.m - 1, d.d)).toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" });
+    const yr = (d) => (d.y !== new Date().getFullYear() ? " " + d.y : "");
+    let s1 = `${wd(a)} ${a.d} ${MONTHS[a.m - 1]}` + (b && b.y === a.y ? "" : yr(a));
+    if (b) s1 += ` – ${wd(b)} ${b.d} ${MONTHS[b.m - 1]}${yr(b)}`;
+    const time = e.start_time ? e.start_time + (e.end_time ? "–" + e.end_time : "") : "All day";
+    return `${s1} · ${time}`;
+  }
+  function evMatches(e) {
+    const q = $("qSearch").value.trim().toLowerCase();
+    return !q || [e.title, e.location, e.details].join(" ").toLowerCase().includes(q);
+  }
+
+  function eventCard(e) {
+    const c = el("article", "ev");
+    const a = dParts(e.starts_on);
+    const badge = el("div", "ev-date");
+    badge.append(el("b", null, e.ends_on && dParts(e.ends_on).m === a.m ? `${a.d}–${dParts(e.ends_on).d}` : String(a.d)), el("span", null, MONTHS[a.m - 1]));
+    const body = el("div", "ev-body");
+    const top = el("div", "ev-top");
+    top.append(el("h3", "ev-title", e.title));
+    const w = when(e); if (w) top.append(el("span", "ev-when" + (w === "Today" || w === "On now" ? " now" : ""), w));
+    body.append(top, el("div", "ev-meta", dateText(e)));
+    if (e.location) body.append(el("div", "ev-loc", e.location));
+    if (e.details) { const d = el("p", "ev-details", e.details); body.append(d); d.addEventListener("click", () => d.classList.toggle("open")); }
+    if (isAdmin()) body.append(btn("btn-sm ev-edit", "Edit", () => openEvSheet(e)));
+    c.append(badge, body);
+    return c;
+  }
+
+  function renderEvents() {
+    if (tab === "events") {
+      const t = today();
+      const list = events.filter(evMatches);
+      const up = list.filter((e) => lastDay(e) >= t), past = list.filter((e) => lastDay(e) < t).reverse();
+      const next = up[0];
+      $("count").textContent = !evLoaded ? "" : `${up.length} upcoming ${up.length === 1 ? "event" : "events"}` + (next ? ` · next ${(when(next) || "on " + dateText(next).split(" · ")[0]).replace(/^In /, "in ").replace(/^Today$/, "today").replace(/^Tomorrow$/, "tomorrow").replace(/^On now$/, "on now")}` : "");
+      const box = $("evList"); box.replaceChildren();
+      if (!evLoaded) {
+        const e = el("div", "empty"); e.append(el("b", null, "Events aren't set up yet"), el("span", null, "The database needs its events update first."));
+        box.append(e);
+      } else if (!up.length) {
+        const e = el("div", "empty"); e.append(el("b", null, list.length < events.length ? "No matching events" : "No upcoming events"), el("span", null, isAdmin() ? "Tap + Add to add one." : "Check back later."));
+        box.append(e);
+      }
+      let month = "";
+      for (const e of up) {
+        const p = dParts(e.starts_on), key = `${p.y}-${p.m}`;
+        if (key !== month) { month = key; box.append(el("div", "group-head", new Date(Date.UTC(p.y, p.m - 1, 1)).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" }))); }
+        box.append(eventCard(e));
+      }
+      $("pastBtn").hidden = !past.length;
+      $("pastBtn").textContent = showPast ? "Hide past events" : `Show past events (${past.length})`;
+      const pb = $("evPast"); pb.hidden = !showPast || !past.length; pb.replaceChildren(...(showPast ? past.map(eventCard) : []));
+    }
+    $("locList").replaceChildren(...[...new Set(events.map((e) => e.location).filter(Boolean))].sort().map((v) => new Option(v)));
+  }
+  $("pastBtn").addEventListener("click", () => { showPast = !showPast; renderEvents(); });
+
+  // Tabs
+  function setTab(next) {
+    if (!isAdmin()) next = "events";
+    tab = next;
+    try { localStorage.setItem("kitlog.tab", tab); } catch { /* ignore */ }
+    $("tabAthletes").setAttribute("aria-selected", String(tab === "athletes"));
+    $("tabEvents").setAttribute("aria-selected", String(tab === "events"));
+    $("athletesView").hidden = tab !== "athletes";
+    $("eventsView").hidden = tab !== "events";
+    $("filterBtn").hidden = tab !== "athletes";
+    if (tab !== "athletes") { $("filters").hidden = true; $("filterBtn").setAttribute("aria-expanded", "false"); }
+    $("qSearch").placeholder = tab === "events" ? "Search events, places…" : "Search athletes, gyms…";
+    $("addBtn").setAttribute("aria-label", tab === "events" ? "Add event" : "Add athlete");
+    if (tab === "athletes") render(); else renderEvents();
+  }
+  $("tabAthletes").addEventListener("click", () => setTab("athletes"));
+  $("tabEvents").addEventListener("click", () => setTab("events"));
+
+  // Event form
+  function syncAllDay() { $("eTimes").hidden = $("eAllDay").checked; }
+  $("eAllDay").addEventListener("change", syncAllDay);
+  function openEvSheet(e) {
+    if (!evLoaded) { toast("Events aren't set up in the database yet."); return; }
+    evEditingId = e ? e.id : null; evArmedDelete = false;
+    $("evTitle").textContent = e ? "Edit event" : "Add event";
+    $("eTitle").value = e ? e.title : "";
+    $("eStart").value = e ? e.starts_on : today();
+    $("eEnd").value = e ? e.ends_on : "";
+    $("eAllDay").checked = e ? !e.start_time : true;
+    $("eStartTime").value = e ? e.start_time : "";
+    $("eEndTime").value = e ? e.end_time : "";
+    $("eLocation").value = e ? e.location : "";
+    $("eDetails").value = e ? e.details : "";
+    $("evDelete").hidden = !e; $("evDelete").textContent = "Delete event";
+    $("evMsg").textContent = "";
+    syncAllDay();
+    $("toast").hidden = true;
+    $("evSheet").hidden = false; document.body.classList.add("locked");
+    if (!e) setTimeout(() => $("eTitle").focus(), 50);
+  }
+  function closeEvSheet() { $("evSheet").hidden = true; evEditingId = null; if ($("sheet").hidden && $("manage").hidden && $("bulk").hidden) document.body.classList.remove("locked"); }
+  $("evClose").addEventListener("click", closeEvSheet);
+  $("evSheet").addEventListener("click", (e) => { if (e.target === $("evSheet")) closeEvSheet(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("evSheet").hidden) closeEvSheet(); });
+
+  $("evForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const allDay = $("eAllDay").checked;
+    const data = {
+      title: str($("eTitle").value, 120), starts_on: $("eStart").value, ends_on: isDate($("eEnd").value) ? $("eEnd").value : "",
+      start_time: !allDay && isTime($("eStartTime").value) ? $("eStartTime").value : "",
+      end_time: !allDay && isTime($("eEndTime").value) ? $("eEndTime").value : "",
+      location: str($("eLocation").value, 200), details: str($("eDetails").value, 4000),
+    };
+    if (!data.title) { $("evMsg").textContent = "Enter the event name."; $("eTitle").focus(); return; }
+    if (!isDate(data.starts_on)) { $("evMsg").textContent = "Pick a date."; $("eStart").focus(); return; }
+    if (data.ends_on && data.ends_on < data.starts_on) { $("evMsg").textContent = "The end date is before the start date."; $("eEnd").focus(); return; }
+    if (!allDay && !data.start_time) { $("evMsg").textContent = "Pick a start time, or switch on All day."; $("eStartTime").focus(); return; }
+    const b = $("evSave"); b.disabled = true;
+    try {
+      await call("save_event", { p_id: evEditingId, p_data: data });
+      toast((evEditingId ? "Saved " : "Added ") + data.title);
+      closeEvSheet(); load();
+    } catch (err) { if (err.code !== "locked") $("evMsg").textContent = errorText(err); }
+    finally { b.disabled = false; }
+  });
+  $("evDelete").addEventListener("click", async () => {
+    if (!evArmedDelete) { evArmedDelete = true; $("evDelete").textContent = "Tap again to delete"; return; }
+    try { await call("delete_event", { p_id: evEditingId }); toast("Deleted"); closeEvSheet(); load(); }
+    catch (err) { if (err.code !== "locked") $("evMsg").textContent = errorText(err); }
+  });
+
+  // Events PDF
+  function exportEvents() {
+    const t = today();
+    const list = events.filter(evMatches).filter((e) => showPast || lastDay(e) >= t);
+    if (!list.length) { toast("No events to export."); return; }
+    const r = $("report"); r.replaceChildren();
+    const head = el("div", "rp-head");
+    const logo = new Image(); logo.src = "assets/logo.png"; logo.alt = "Grey Athletes"; logo.className = "rp-logo";
+    const meta = el("div", "rp-meta");
+    meta.append(el("div", "rp-title", "Upcoming events"), el("div", "rp-sub", new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) + ` · ${list.length} ${list.length === 1 ? "event" : "events"}`));
+    head.append(logo, meta); r.append(head);
+    const tbl = el("table", "rp-table"), thead = el("thead"), hr = el("tr");
+    for (const [txt, cls] of [["Date"], ["Time", "c"], ["Event"], ["Location"], ["Details"]]) hr.append(el("th", cls || null, txt));
+    const spacer = (tag) => { const tr = el("tr", "rp-space"); const c = el(tag); c.colSpan = 5; tr.append(c); return tr; };
+    thead.append(spacer("th"), hr); tbl.append(thead);
+    const tb = el("tbody");
+    for (const e of list) {
+      const tr = el("tr");
+      const [d, tm] = dateText(e).split(" · ");
+      tr.append(el("td", "nowrap", d), el("td", "c nowrap", tm), el("td", "who", e.title), el("td", null, e.location), el("td", "txt", e.details));
+      tb.append(tr);
+    }
+    const tf = el("tfoot"); tf.append(spacer("td"));
+    tbl.append(tb, tf); r.append(tbl);
+    r.append(el("div", "rp-foot", "Grey Athletes · generated " + new Date().toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })));
+    const oldTitle = document.title; document.title = "Grey Athletes - events - " + today();
+    const go = () => { try { window.print(); } catch { toast("Printing isn't available here. Open the site in Safari or Chrome."); } setTimeout(() => { document.title = oldTitle; }, 1000); };
+    logo.complete ? go() : (logo.onload = logo.onerror = go);
+  }
+
+  // ---------- Team (admins) ----------
+  let team = [], teamArmed = null;
+  async function openTeam() {
+    $("teamMsg").textContent = ""; teamArmed = null;
+    $("team").hidden = false; document.body.classList.add("locked");
+    await loadTeam();
+  }
+  function closeTeam() { $("team").hidden = true; if ($("sheet").hidden && $("manage").hidden && $("evSheet").hidden && $("bulk").hidden) document.body.classList.remove("locked"); }
+  async function loadTeam() {
+    try { const t = await call("list_team", {}); team = Array.isArray(t) ? t : []; renderTeam(); }
+    catch (err) { if (err.code !== "locked") $("teamMsg").textContent = errorText(err); }
+  }
+  async function teamCall(fn, args, ok) {
+    $("teamMsg").textContent = "";
+    try { await call(fn, args); toast(ok); teamArmed = null; await loadTeam(); return true; }
+    catch (err) { if (err.code !== "locked") $("teamMsg").textContent = errorText(err); return false; }
+  }
+  function renderTeam() {
+    const ul = $("teamList"); ul.replaceChildren();
+    for (const m of team) {
+      const email = str(m.email, 200), r = m.role === "admin" ? "admin" : "viewer";
+      const li = el("li"); const row = el("div", "m-row");
+      const nm = el("div", "m-name", email + (email === myEmail ? " (you)" : ""));
+      nm.append(el("div", "m-sub", (r === "admin" ? "Admin" : "Calendar viewer") + (m.joined ? "" : " · hasn't signed in yet")));
+      const sel = document.createElement("select"); sel.className = "role-sel"; sel.setAttribute("aria-label", "Role for " + email);
+      sel.append(new Option("Admin", "admin"), new Option("Viewer", "viewer")); sel.value = r;
+      sel.addEventListener("change", () => teamCall("set_team_member", { p_email: email, p_role: sel.value }, "Updated " + email));
+      const del = btn("btn-sm danger", teamArmed === email ? "Tap again" : "Remove", () => {
+        if (teamArmed !== email) { teamArmed = email; renderTeam(); return; }
+        teamCall("remove_team_member", { p_email: email }, "Removed " + email).then((done) => { if (done && email === myEmail) unlocked(); });
+      });
+      const act = el("div", "team-act"); act.append(sel, del);
+      row.append(nm, act); li.append(row); ul.append(li);
+    }
+  }
+  $("teamAdd").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = str($("newMember").value, 200).toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { $("teamMsg").textContent = "Enter a Gmail address, e.g. name@gmail.com"; return; }
+    if (await teamCall("set_team_member", { p_email: email, p_role: $("newRole").value }, "Added " + email)) $("newMember").value = "";
+  });
+  $("teamBtn").addEventListener("click", openTeam);
+  $("teamClose").addEventListener("click", closeTeam);
+  $("team").addEventListener("click", (e) => { if (e.target === $("team")) closeTeam(); });
+
   // ---------- Header menu ----------
   function setMenu(open) { $("menu").hidden = !open; $("menuBtn").setAttribute("aria-expanded", String(open)); }
   $("menuBtn").addEventListener("click", (e) => { e.stopPropagation(); setMenu($("menu").hidden); });
@@ -793,6 +1085,6 @@
 
   // ---------- Start ----------
   if (!configured) show("setup");
-  else if (token) unlocked();
-  else lock(false);
+  else if (auth) unlocked();
+  else signOut(false);
 })();

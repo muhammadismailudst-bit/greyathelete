@@ -273,3 +273,46 @@ label.btn-sm{display:inline-flex;align-items:center}
 .filter-btn[aria-expanded="true"]{border-color:var(--gold);color:var(--gold)}
 .filter-count{position:absolute;top:-6px;right:-6px;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:var(--gold);color:var(--gold-ink);font-size:12px;font-weight:700;display:grid;place-items:center}
 .clear-filters{grid-column:1/-1;justify-self:start;font:inherit;font-size:14px;background:none;border:0;color:var(--gold);padding:2px 4px;cursor:pointer}
+
+/* ---------- Tabs ---------- */
+.tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--ink-2);border:1px solid var(--ink-line);border-radius:12px;padding:3px;gap:3px}
+.tabs button{font:inherit;font-size:15px;font-weight:600;border:0;border-radius:9px;padding:9px 0;background:none;color:var(--on-ink-muted);cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--on-ink);color:var(--ink)}
+
+/* ---------- Events ---------- */
+.ev{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--line)}
+.ev-date{flex:none;width:56px;height:60px;border-radius:12px;background:var(--ink);color:var(--on-ink);display:grid;place-content:center;text-align:center;line-height:1.05}
+.ev-date b{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.ev-date span{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);font-weight:600;margin-top:2px}
+.ev-body{flex:1;min-width:0;display:grid;gap:3px;justify-items:start}
+.ev-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;width:100%}
+.ev-title{margin:0;font-size:16px;font-weight:700;line-height:1.3;overflow-wrap:anywhere}
+.ev-when{flex:none;font-size:12px;font-weight:700;color:#8a6a43;background:#f6efe6;border-radius:999px;padding:3px 9px;white-space:nowrap}
+.ev-when.now{color:var(--good);background:var(--good-soft)}
+.ev-meta{font-size:14px;color:var(--fg)}
+.ev-loc{font-size:14px;color:var(--muted);padding-left:18px;position:relative;overflow-wrap:anywhere}
+.ev-loc::before{content:"";position:absolute;left:2px;top:4px;width:10px;height:10px;border:2px solid var(--muted);border-radius:50% 50% 50% 0;transform:rotate(-45deg)}
+.ev-details{margin:4px 0 0;font-size:14px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer;white-space:pre-wrap;overflow-wrap:anywhere}
+.ev-details.open{display:block}
+.ev-edit{margin-top:6px;padding:6px 14px;font-size:13px}
+.past-btn{display:block;margin:18px auto 6px;font:inherit;font-size:14px;font-weight:600;background:none;border:1px solid var(--line);border-radius:999px;padding:8px 16px;color:var(--muted);cursor:pointer}
+#evPast .ev{opacity:.6}
+.toggle-row{border:1px solid var(--line);border-radius:12px}
+#eDetails{min-height:110px}
+@media print{ .rp-table td.nowrap{white-space:nowrap} }
+
+/* ---------- Sign-in & roles ---------- */
+.google-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;font:inherit;font-size:16px;font-weight:600;border:1px solid var(--line);border-radius:14px;padding:14px;background:var(--bg);color:var(--fg);cursor:pointer;box-shadow:0 1px 2px rgba(17,20,24,.06)}
+.google-btn:active{transform:scale(.99)}
+body[data-role="viewer"] .admin-only{display:none!important}
+.menu-who{font-size:12px;color:var(--muted);padding:8px 12px 6px;border-bottom:1px solid var(--line);margin-bottom:4px;overflow-wrap:anywhere}
+.menu-who:empty{display:none}
+.team-add{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center}
+.team-add select{width:auto;padding-right:30px}
+@media (max-width:420px){.team-add{grid-template-columns:1fr auto}.team-add input{grid-column:1/-1}}
+.team-act{display:flex;gap:6px;align-items:center;flex:none}
+.role-sel{width:auto;padding:7px 28px 7px 10px;font-size:14px;border-radius:10px}
+#teamList .m-row{flex-wrap:wrap}
+#teamList .m-name{flex-basis:100%;overflow-wrap:anywhere}
+#teamList .team-act{width:100%}
+#teamList .role-sel{flex:1}
