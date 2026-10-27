@@ -2,6 +2,11 @@
   "use strict";
 
   const SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
+  const GENDERS = ["Male", "Female"];
+  // Same tidy-up rules as the database (_clean_phone / _clean_instagram / _clean_gender).
+  const cleanPhone = (v) => String(v || "").replace(/[^0-9+ ()-]/g, "").trim().slice(0, 30);
+  const cleanInsta = (v) => String(v || "").trim().replace(/^(https?:\/\/)?(www\.)?instagram\.com\//i, "").replace(/[/?#].*$/, "").replace(/[^A-Za-z0-9._]/g, "").slice(0, 30);
+  const cleanGender = (v) => ({ male: "Male", m: "Male", female: "Female", f: "Female" })[String(v || "").trim().toLowerCase()] || "";
   const AUTH_KEY = "kitlog.auth";
   const REFRESH_MS = 30000;
 
@@ -180,6 +185,7 @@
     return {
       id: String(d.id), items: its,
       comps: Array.isArray(d.competitions) ? d.competitions.map(String) : [], photoTs: typeof d.photo === "string" ? d.photo : "",
+      gender: GENDERS.includes(d.gender) ? d.gender : "", phone: cleanPhone(d.phone), instagram: cleanInsta(d.instagram),
       name: str(d.name, 80) || "Unnamed", gym: str(d.gym, 80), categories: Array.isArray(d.categories) ? d.categories.map((c) => str(c, 40)).filter(Boolean) : [], size: str(d.size, 10),
       date: str(d.date, 10), note: str(d.note, 1000), createdAt: Date.parse(d.created_at) || 0,
     };
@@ -242,6 +248,8 @@
   }
   function syncSeg(box, value) { for (const b of box.children) b.setAttribute("aria-pressed", String(b.textContent === value)); }
   buildSeg($("segSize"), SIZES, () => size, (v) => (size = v));
+  let gender = "";
+  buildSeg($("segGender"), GENDERS, () => gender, (v) => (gender = v));
 
   // A full-width row with a tick box on the right.
   function checkRow(label, on, onChange, sub) {
@@ -352,6 +360,9 @@
     $("fDate").value = p ? (p.date || "") : (last.date || today());
     $("fNote").value = p ? p.note : "";
     size = p ? p.size : ""; syncSeg($("segSize"), size);
+    gender = p ? p.gender : ""; syncSeg($("segGender"), gender);
+    $("fPhone").value = p ? p.phone : "";
+    $("fInsta").value = p ? p.instagram : "";
     formCats = new Set(p ? p.categories : []);
     renderFormCats();
     formComps = new Set(p ? p.comps : []);
@@ -381,6 +392,7 @@
     const its = {}; for (const it of items) if (formItems.has(it.id)) its[it.id] = 1;
     const data = {
       name: str($("fName").value, 80), gym: str($("fGym").value, 80),
+      gender: GENDERS.includes(gender) ? gender : "", phone: cleanPhone($("fPhone").value), instagram: cleanInsta($("fInsta").value),
       categories: categories.filter((c) => formCats.has(c)).slice(0, 1), size: SIZES.includes(size) ? size : "",
       date: isDate($("fDate").value) ? $("fDate").value : "",
       note: str($("fNote").value, 1000), items: its, competitions: comps.filter((c) => formComps.has(c.id)).map((c) => c.id),
@@ -583,11 +595,15 @@
       const c = splitLine(line).map((x) => x.trim());
       if (i === 0 && c[0] && c[0].toLowerCase() === "name") return;      // header row
       const name = c[0].slice(0, 80), gym = (c[1] || "").slice(0, 80);
-      const [size, sw] = normSize(c[3]);
-      const cats = multi(c[2]);
-      const row = { name, gym, categories: cats.slice(0, 1), size, competitions: multi(c[4]), items: multi(c[5]),
-        note: c.slice(6).filter(Boolean).join(", ").slice(0, 1000),
+      const [size, sw] = normSize(c[6]);
+      const cats = multi(c[5]);
+      const gRaw = (c[2] || "").trim(), gen = cleanGender(gRaw);
+      const row = { name, gym, gender: gen, phone: cleanPhone(c[3]), instagram: cleanInsta(c[4]),
+        categories: cats.slice(0, 1), size, competitions: multi(c[7]), items: multi(c[8]),
+        note: c.slice(9).filter(Boolean).join(", ").slice(0, 1000), genderWarn: gRaw && !gen ? `gender "${gRaw}" not recognised` : "",
         warn: [sw, cats.length > 1 && `only one category allowed, kept "${cats[0]}"`].filter(Boolean), skip: "" };
+      if (row.genderWarn) row.warn.push(row.genderWarn);
+      delete row.genderWarn;
       const key = (name + "|" + gym).toLowerCase();
       if (!name) row.skip = "no name";
       else if (existing.has(key)) row.skip = "already in the list";
@@ -627,7 +643,7 @@
     for (const r of bulkRows.slice(0, 200)) {
       const li = el("li", r.skip ? "skip" : "");
       li.append(el("span", "p-name", (r.name || "(no name)") + (r.skip ? ` — skipped: ${r.skip}` : "")));
-      const sub = [r.gym, r.categories.join(", "), r.size && "Size " + r.size].filter(Boolean).join(" · ");
+      const sub = [r.gym, r.gender, r.categories.join(", "), r.size && "Size " + r.size, r.phone, r.instagram && "@" + r.instagram].filter(Boolean).join(" · ");
       if (sub) li.append(el("span", "p-sub", sub));
       if (r.competitions.length) li.append(el("span", "p-sub", "Competitions: " + r.competitions.join(", ")));
       if (r.items.length) li.append(el("span", "p-sub", "Items: " + r.items.join(", ")));
@@ -674,9 +690,9 @@
 
   let pendingRender = false;
   function filtered() {
-    const q = $("qSearch").value.trim().toLowerCase(), g = $("qGym").value, cat = $("qCat").value, cm = $("qComp").value;
-    return people.filter((p) => (!g || p.gym === g) && (!cat || p.categories.includes(cat)) && (!cm || p.comps.includes(cm)) &&
-      (!q || [p.name, p.gym, ...compNames(p), p.note].join(" ").toLowerCase().includes(q)))
+    const q = $("qSearch").value.trim().toLowerCase(), g = $("qGym").value, cat = $("qCat").value, cm = $("qComp").value, gd = $("qGender").value;
+    return people.filter((p) => (!g || p.gym === g) && (!cat || p.categories.includes(cat)) && (!cm || p.comps.includes(cm)) && (!gd || p.gender === gd) &&
+      (!q || [p.name, p.gym, p.phone, p.instagram, ...compNames(p), p.note].join(" ").toLowerCase().includes(q)))
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
   }
 
@@ -724,7 +740,7 @@
     const initials = p.name.split(/\s+/).map((w) => Array.from(w)[0] || "").filter((c) => /[\p{L}\p{N}]/u.test(c)).slice(0, 2).join("").toUpperCase();
     const who = el("div", "who");
     who.append(el("div", "name", p.name),
-      el("div", "meta", [p.gym, p.categories.join(", "), p.size].filter(Boolean).join(" · ") || "—"));
+      el("div", "meta", [p.gym, p.categories.join(", "), p.gender, p.size].filter(Boolean).join(" · ") || "—"));
     row.append(avatar(p, initials), who,
       el("span", "score" + (items.length && given === items.length ? " full" : ""), `${given}/${items.length}`));
     row.addEventListener("click", () => { openId = openId === p.id ? null : p.id; armedDelete = null; render(); });
@@ -732,6 +748,17 @@
 
     if (openId === p.id) {
       const d = el("div", "detail");
+      if (p.phone || p.instagram) {
+        const cr = el("div", "contact");
+        if (p.phone) {
+          const a = el("a", "contact-chip"); a.href = "tel:" + p.phone.replace(/[^0-9+]/g, ""); a.append(icon("phone"), el("span", null, p.phone)); cr.append(a);
+        }
+        if (p.instagram) {
+          const a = el("a", "contact-chip"); a.href = "https://instagram.com/" + encodeURIComponent(p.instagram); a.target = "_blank"; a.rel = "noopener noreferrer";
+          a.append(icon("insta"), el("span", null, "@" + p.instagram)); cr.append(a);
+        }
+        d.append(cr);
+      }
       const section = (label, rows, kind, onAdded) => {
         const t = el("div", "qty-list" + (kind === "cat" ? " single" : "")); t.append(...rows, addRow(kind, onAdded));
         d.append(el("div", "sec-lbl", label), t);
@@ -744,7 +771,7 @@
         "comp", async (id) => { if (!p.comps.includes(id)) await toggleComp(p, id); });
       const facts = el("div", "facts");
       const fact = (label, v) => { if (!v) return; const s = el("span", null, label + " "); s.append(el("b", null, v)); facts.append(s); };
-      fact("Size", p.size); fact("Date", fmtDate(p.date));
+      fact("Gender", p.gender); fact("Size", p.size); fact("Date", fmtDate(p.date));
       if (facts.childElementCount) d.append(facts);
       if (p.note) d.append(el("div", "note", p.note));
       const act = el("div", "actions");
@@ -759,11 +786,11 @@
     return li;
   }
 
-  for (const id of ["qSearch", "qGym", "qCat", "qComp"]) $(id).addEventListener("input", render);
+  for (const id of ["qSearch", "qGym", "qCat", "qComp", "qGender"]) $(id).addEventListener("input", render);
   $("qSearch").addEventListener("input", () => renderEvents());
 
   // ---------- Filter panel ----------
-  const FILTERS = ["qCat", "qGym", "qComp"];
+  const FILTERS = ["qCat", "qGender", "qGym", "qComp"];
   function syncFilterBtn() {
     const n = FILTERS.filter((id) => $(id).value).length;
     $("filterCount").textContent = String(n); $("filterCount").hidden = !n;
@@ -777,76 +804,133 @@
   $("clearFilters").addEventListener("click", () => { for (const id of FILTERS) $(id).value = ""; syncFilterBtn(); render(); });
   for (const id of FILTERS) $(id).addEventListener("input", syncFilterBtn);
 
-  // ---------- PDF report ----------
-  // Builds a print-only page and opens the system print dialog ("Save as PDF" / Share → Save to Files).
-  function buildReport(list) {
-    const r = $("report"); r.replaceChildren();
-    const head = el("div", "rp-head");
-    const logo = new Image(); logo.src = "assets/logo.png"; logo.alt = "Grey Athletes"; logo.className = "rp-logo";
-    const meta = el("div", "rp-meta");
+  // ---------- PDF export ----------
+  // Builds the PDF file in the browser (jsPDF + html2canvas, served from /vendor), so there is
+  // no print dialog and no browser header/footer (date, title, URL). Pages are A4 landscape.
+  const PAGE_W = 1123, PAGE_H = 794;          // A4 landscape at 96 dpi
+  let pdfLibs = null;
+  function loadScript(src) {
+    return new Promise((ok, bad) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = () => bad(new Error("load")); document.head.append(s); });
+  }
+  function loadPdfLibs() {
+    if (!pdfLibs) pdfLibs = Promise.all([loadScript("vendor/jspdf-2.5.2.umd.min.js"), loadScript("vendor/html2canvas-1.4.1.min.js")])
+      .catch((e) => { pdfLibs = null; throw e; });
+    return pdfLibs;
+  }
+  const waitImages = (root) => Promise.all([...root.querySelectorAll("img")].map((img) =>
+    img.complete ? null : new Promise((ok) => { img.onload = img.onerror = ok; })));
+
+  // spec: { title, subs: [text], chips: Node|null, headCells: [[text, cls]], rows: [tr], file }
+  async function makePdf(spec) {
+    await loadPdfLibs();
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    const stage = $("report"); stage.replaceChildren(); stage.hidden = false;
     const now = new Date();
-    meta.append(el("div", "rp-title", "Athlete kit report"),
-      el("div", "rp-sub", now.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) + " · " + list.length + (list.length === 1 ? " athlete" : " athletes")));
-    const filters = [$("qCat").value && "Category: " + $("qCat").value, $("qComp").value && "Competition: " + compName($("qComp").value), $("qGym").value && "Gym: " + $("qGym").value,
-      $("qSearch").value.trim() && `Search: "${$("qSearch").value.trim()}"`].filter(Boolean);
-    if (filters.length) meta.append(el("div", "rp-sub", filters.join(" · ")));
-    head.append(logo, meta);
-    r.append(head);
-
-    // Summary chips: how many got each item
-    const sum = el("div", "rp-summary");
-    for (const it of items) {
-      const n = list.filter((p) => p.items[it.id]).length;
-      const c = el("div", "rp-chip"); c.append(el("b", null, `${n}/${list.length}`), el("span", null, it.name)); sum.append(c);
-    }
-    r.append(sum);
-
-    const withPhotos = list.some((p) => photos.has(p.id));
-    const t = el("table", "rp-table");
-    const thead = el("thead"), hr = el("tr");
-    const th = (txt, cls) => hr.append(el("th", cls || null, txt));
-    th("#", "num"); if (withPhotos) th("", "ph"); th("Athlete"); th("Category"); th("Size", "c");
-    for (const it of items) th(it.name, "c item");
-    th("Competitions"); th("Note");
-    const cols = hr.children.length;
-    const spacer = (tag) => { const tr = el("tr", "rp-space"); const c = el(tag); c.colSpan = cols; tr.append(c); return tr; };
-    thead.append(spacer("th"), hr); t.append(thead);
-    const tfoot = el("tfoot"); tfoot.append(spacer("td")); t.append(tfoot);
-    const tb = el("tbody");
-    list.forEach((p, i) => {
-      const tr = el("tr");
-      tr.append(el("td", "num", String(i + 1)));
-      if (withPhotos) {
-        const td = el("td", "ph"); const ph = photos.get(p.id);
-        if (ph) { const img = new Image(); img.src = ph.data; img.alt = ""; td.append(img); }
-        tr.append(td);
+    const newPage = (first) => {
+      const pg = el("div", "rp-page");
+      if (first) {
+        const head = el("div", "rp-head");
+        const logo = new Image(); logo.src = "assets/logo.png"; logo.alt = ""; logo.className = "rp-logo";
+        const meta = el("div", "rp-meta"); meta.append(el("div", "rp-title", spec.title));
+        for (const t of spec.subs) meta.append(el("div", "rp-sub", t));
+        head.append(logo, meta); pg.append(head);
+        if (spec.chips) pg.append(spec.chips);
       }
-      const who = el("td", "who"); who.append(el("b", null, p.name)); if (p.gym) who.append(el("span", null, p.gym));
-      tr.append(who, el("td", null, p.categories.join(", ")), el("td", "c", p.size));
-      for (const it of items) { const td = el("td", "c item"); td.append(el("span", p.items[it.id] ? "yes" : "no", p.items[it.id] ? "✓" : "–")); tr.append(td); }
-      tr.append(el("td", "txt", compNames(p).join(", ")), el("td", "txt", p.note));
-      tb.append(tr);
-    });
-    t.append(tb);
-    r.append(t);
-    r.append(el("div", "rp-foot", "Grey Athletes · generated " + now.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })));
-    return [...r.querySelectorAll("img")];
+      const t = el("table", "rp-table"), thead = el("thead"), hr = el("tr");
+      for (const [txt, cls] of spec.headCells) hr.append(el("th", cls || null, txt));
+      thead.append(hr); const tb = el("tbody"); t.append(thead, tb); pg.append(t);
+      const foot = el("div", "rp-foot"); pg.append(foot);
+      stage.append(pg);
+      return { pg, tb, foot };
+    };
+    // Lay rows out page by page: add a row, and move it to a fresh page if it overflows.
+    const pages = [newPage(true)];
+    await waitImages(stage);
+    for (const tr of spec.rows) {
+      let cur = pages[pages.length - 1];
+      cur.tb.append(tr);
+      if (cur.tb.children.length > 1 && cur.pg.scrollHeight > PAGE_H) {
+        tr.remove(); cur = newPage(false); pages.push(cur); cur.tb.append(tr);
+      }
+    }
+    await waitImages(stage);
+    pages.forEach((p, i) => { p.foot.textContent = `Grey Athletes · ${now.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })} · Page ${i + 1} of ${pages.length}`; });
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4", compress: true });
+    for (let i = 0; i < pages.length; i++) {
+      const canvas = await window.html2canvas(pages[i].pg, { scale: 2, backgroundColor: "#ffffff", logging: false, width: PAGE_W, height: PAGE_H, windowWidth: PAGE_W });
+      if (i) doc.addPage("a4", "landscape");
+      doc.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, 297, 210, undefined, "FAST");
+    }
+    doc.setProperties({ title: spec.file.replace(/\.pdf$/, ""), author: "Grey Athletes", creator: "Grey Athletes" });
+    stage.replaceChildren(); stage.hidden = true;
+    await deliverPdf(doc.output("blob"), spec.file);
   }
 
-  $("pdfBtn").addEventListener("click", async () => {
-    if (tab === "events") { exportEvents(); return; }
+  // iPhone/Android: the Share sheet (Save to Files, WhatsApp, Mail…). Elsewhere: a normal download.
+  async function deliverPdf(blob, name) {
+    const file = new File([blob], name, { type: "application/pdf" });
+    if (navigator.canShare && navigator.canShare({ files: [file] }) && /iPhone|iPad|Android/i.test(navigator.userAgent)) {
+      try { await navigator.share({ files: [file], title: name }); return; }
+      catch (e) { if (e && e.name === "AbortError") return; }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    toast("PDF downloaded");
+  }
+
+  let pdfBusy = false;
+  async function exportPdf(build) {
+    if (pdfBusy) return;
+    pdfBusy = true; toast("Making PDF…");
+    try { await build(); }
+    catch (err) { if (err && err.code !== "locked") toast("Couldn't make the PDF. Check your connection and try again."); }
+    finally { pdfBusy = false; $("report").hidden = true; }
+  }
+
+  function athletesPdf() {
     const list = filtered();
-    if (!list.length) { toast("Nothing to export. Clear the filters or add athletes first."); return; }
-    toast("Preparing PDF…");
-    await loadPhotos();
-    const imgs = buildReport(list);
-    await Promise.all(imgs.map((img) => (img.complete ? null : new Promise((ok) => { img.onload = img.onerror = ok; }))));
-    const oldTitle = document.title;
-    document.title = "Grey Athletes - kit report - " + today();
-    $("toast").hidden = true;
-    try { window.print(); } catch { toast("Printing isn't available here. Open the site in Safari or Chrome."); }
-    setTimeout(() => { document.title = oldTitle; }, 1000);
-  });
+    if (!list.length) { toast("Nothing to export. Clear the filters or add athletes first."); return Promise.resolve(); }
+    return (async () => {
+      await loadPhotos();
+      const filters = [$("qCat").value && "Category: " + $("qCat").value, $("qGender").value && "Gender: " + $("qGender").value,
+        $("qComp").value && "Competition: " + compName($("qComp").value), $("qGym").value && "Gym: " + $("qGym").value,
+        $("qSearch").value.trim() && `Search: "${$("qSearch").value.trim()}"`].filter(Boolean);
+      const chips = el("div", "rp-summary");
+      for (const it of items) {
+        const n = list.filter((p) => p.items[it.id]).length;
+        const c = el("div", "rp-chip"); c.append(el("b", null, `${n}/${list.length}`), el("span", null, it.name)); chips.append(c);
+      }
+      const withPhotos = list.some((p) => photos.has(p.id));
+      const headCells = [["#", "num"], ...(withPhotos ? [["", "ph"]] : []), ["Athlete"], ["Gender", "c"], ["Category"], ["Size", "c"],
+        ...items.map((it) => [it.name, "c item"]), ["Contact"], ["Competitions"], ["Note"]];
+      const rows = list.map((p, i) => {
+        const tr = el("tr");
+        tr.append(el("td", "num", String(i + 1)));
+        if (withPhotos) {
+          const td = el("td", "ph"); const ph = photos.get(p.id);
+          if (ph) { const img = new Image(); img.src = ph.data; img.alt = ""; td.append(img); }
+          tr.append(td);
+        }
+        const who = el("td", "who"); who.append(el("b", null, p.name)); if (p.gym) who.append(el("span", null, p.gym));
+        tr.append(who, el("td", "c", p.gender ? p.gender[0] : ""), el("td", null, p.categories.join(", ")), el("td", "c", p.size));
+        for (const it of items) { const td = el("td", "c item"); td.append(el("span", p.items[it.id] ? "yes" : "no", p.items[it.id] ? "✓" : "–")); tr.append(td); }
+        const ct = el("td", "txt nowrap"); if (p.phone) ct.append(el("div", null, p.phone)); if (p.instagram) ct.append(el("div", null, "@" + p.instagram));
+        tr.append(ct, el("td", "txt", compNames(p).join(", ")), el("td", "txt", p.note));
+        return tr;
+      });
+      await makePdf({
+        title: "Athlete kit report",
+        subs: [new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) + " · " + list.length + (list.length === 1 ? " athlete" : " athletes"),
+          ...(filters.length ? [filters.join(" · ")] : [])],
+        chips, headCells, rows, file: `Grey Athletes - kit report - ${today()}.pdf`,
+      });
+    })();
+  }
+
+  $("pdfBtn").addEventListener("click", () => exportPdf(tab === "events" ? eventsPdf : athletesPdf));
 
   // ---------- Events ----------
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -888,6 +972,8 @@
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     pin: '<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
     pencil: '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/>',
+    phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>',
+    insta: '<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/>',
   };
   function icon(name) {
     const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -1030,33 +1116,22 @@
   });
 
   // Events PDF
-  function exportEvents() {
+  function eventsPdf() {
     const t = today();
     const list = events.filter(evMatches).filter((e) => showPast || lastDay(e) >= t);
-    if (!list.length) { toast("No events to export."); return; }
-    const r = $("report"); r.replaceChildren();
-    const head = el("div", "rp-head");
-    const logo = new Image(); logo.src = "assets/logo.png"; logo.alt = "Grey Athletes"; logo.className = "rp-logo";
-    const meta = el("div", "rp-meta");
-    meta.append(el("div", "rp-title", "Upcoming events"), el("div", "rp-sub", new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) + ` · ${list.length} ${list.length === 1 ? "event" : "events"}`));
-    head.append(logo, meta); r.append(head);
-    const tbl = el("table", "rp-table"), thead = el("thead"), hr = el("tr");
-    for (const [txt, cls] of [["Date"], ["Time", "c"], ["Event"], ["Location"], ["Details"]]) hr.append(el("th", cls || null, txt));
-    const spacer = (tag) => { const tr = el("tr", "rp-space"); const c = el(tag); c.colSpan = 5; tr.append(c); return tr; };
-    thead.append(spacer("th"), hr); tbl.append(thead);
-    const tb = el("tbody");
-    for (const e of list) {
+    if (!list.length) { toast("No events to export."); return Promise.resolve(); }
+    const rows = list.map((e) => {
       const tr = el("tr");
       const [d, tm] = dateText(e).split(" · ");
-      tr.append(el("td", "nowrap", d), el("td", "c nowrap", tm), el("td", "who", e.title), el("td", null, e.location), el("td", "txt", e.details));
-      tb.append(tr);
-    }
-    const tf = el("tfoot"); tf.append(spacer("td"));
-    tbl.append(tb, tf); r.append(tbl);
-    r.append(el("div", "rp-foot", "Grey Athletes · generated " + new Date().toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })));
-    const oldTitle = document.title; document.title = "Grey Athletes - events - " + today();
-    const go = () => { try { window.print(); } catch { toast("Printing isn't available here. Open the site in Safari or Chrome."); } setTimeout(() => { document.title = oldTitle; }, 1000); };
-    logo.complete ? go() : (logo.onload = logo.onerror = go);
+      tr.append(el("td", "nowrap", d), el("td", "c nowrap", tm), el("td", "who", e.title), el("td", null, e.location), el("td", "txt wide", e.details));
+      return tr;
+    });
+    return makePdf({
+      title: "Upcoming events",
+      subs: [new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) + ` · ${list.length} ${list.length === 1 ? "event" : "events"}`],
+      chips: null, headCells: [["Date"], ["Time", "c"], ["Event"], ["Location"], ["Details"]], rows,
+      file: `Grey Athletes - events - ${today()}.pdf`,
+    });
   }
 
   // ---------- Team (admins) ----------

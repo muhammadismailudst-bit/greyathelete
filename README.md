@@ -41,14 +41,14 @@ Limits to know: everyone shares one PIN, so the app can't tell who changed what.
 Tap **⋯ → Bulk add** and paste one athlete per line (commas, or rows copied from Excel / Google Sheets):
 
 ```
-Name, Gym, Category, Size, Competitions, Items, Note
-Ali Khan, Iron Gym, Qatari, M, SBX Series; Savageline, Hand band; T-shirt, paid
+Name, Gym, Gender, Phone, Instagram, Category, Size, Competitions, Items, Note
+Ali Khan, Iron Gym, Male, +974 5555 1234, ali.khan, Qatari, M, SBX Series; Savageline, Hand band; T-shirt, paid
 ```
 Only Name is required. One category per athlete. Separate several competitions or items with `;`. New category, competition or item names are added to the lists. A header row and athletes already in the list (same name and gym) are skipped. Up to 500 at a time.
 
 ## Photos and PDF
 - **Photos:** in Add/Edit, tap **Add photo**. The photo is cropped square and shrunk to about 480px before upload, then stored in the `photos` table.
-- **Export PDF:** **⋯ → Export PDF** prints the athletes currently shown (search and filters apply) as an A4 landscape report with the logo, item ticks and totals. On iPhone the print sheet has **Save to Files** / **Share**. It needs Safari or Chrome; in-app browsers such as WhatsApp's may not print.
+- **Export PDF:** **⋯ → Export PDF** builds an A4 landscape PDF of the athletes currently shown (search and filters apply), or of the events on the Events tab, with the logo, ticks, totals and page numbers. It is made in the browser (jsPDF + html2canvas in `vendor/`), so there is no print dialog and no browser date/URL on the pages. On phones it opens the Share sheet; on computers it downloads.
 
 ## Events
 The **Events** tab lists upcoming events by month, with the date, time (or all day), location and details. Tap **+ Add** on that tab to add one; **Edit** on a card changes or deletes it. **⋯ → Export PDF** on the Events tab prints the event list. The first 13 events were imported from the "Grey Events" Google Calendar (supabase/008_events.sql).
