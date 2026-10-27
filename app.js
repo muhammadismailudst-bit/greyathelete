@@ -2,11 +2,21 @@
   "use strict";
 
   const SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
-  const GENDERS = ["Male", "Female"];
-  // Same tidy-up rules as the database (_clean_phone / _clean_instagram / _clean_gender).
+  // Suggestions for the Nationality box (free text; anything already used is suggested too).
+  const NATIONALITIES = ["Qatari", "Saudi", "Emirati", "Kuwaiti", "Bahraini", "Omani", "Egyptian", "Jordanian", "Lebanese", "Syrian",
+    "Palestinian", "Iraqi", "Sudanese", "Moroccan", "Tunisian", "Algerian", "Yemeni", "Indian", "Pakistani", "Bangladeshi",
+    "Sri Lankan", "Nepali", "Filipino", "Indonesian", "Iranian", "Turkish", "British", "Irish", "American", "Canadian",
+    "Australian", "South African", "French", "German", "Italian", "Spanish", "Dutch", "Brazilian", "Kenyan", "Nigerian"];
+  // Same tidy-up rules as the database (_clean_phone / _clean_instagram / _clean_nationality).
   const cleanPhone = (v) => String(v || "").replace(/[^0-9+ ()-]/g, "").trim().slice(0, 30);
   const cleanInsta = (v) => String(v || "").trim().replace(/^(https?:\/\/)?(www\.)?instagram\.com\//i, "").replace(/[/?#].*$/, "").replace(/[^A-Za-z0-9._]/g, "").slice(0, 30);
-  const cleanGender = (v) => ({ male: "Male", m: "Male", female: "Female", f: "Female" })[String(v || "").trim().toLowerCase()] || "";
+  // Trim, squash spaces, and reuse the spelling already in use ("qatari" -> "Qatari") so filters group cleanly.
+  function cleanNat(v) {
+    const t = String(v || "").trim().replace(/\s+/g, " ").slice(0, 40);
+    if (!t) return "";
+    const known = [...people.map((p) => p.nationality), ...NATIONALITIES].find((n) => n && n.toLowerCase() === t.toLowerCase());
+    return known || t;
+  }
   const AUTH_KEY = "kitlog.auth";
   const REFRESH_MS = 30000;
 
@@ -185,7 +195,7 @@
     return {
       id: String(d.id), items: its,
       comps: Array.isArray(d.competitions) ? d.competitions.map(String) : [], photoTs: typeof d.photo === "string" ? d.photo : "",
-      gender: GENDERS.includes(d.gender) ? d.gender : "", phone: cleanPhone(d.phone), instagram: cleanInsta(d.instagram),
+      nationality: str(d.nationality, 40), phone: cleanPhone(d.phone), instagram: cleanInsta(d.instagram),
       name: str(d.name, 80) || "Unnamed", gym: str(d.gym, 80), categories: Array.isArray(d.categories) ? d.categories.map((c) => str(c, 40)).filter(Boolean) : [], size: str(d.size, 10),
       date: str(d.date, 10), note: str(d.note, 1000), createdAt: Date.parse(d.created_at) || 0,
     };
@@ -248,8 +258,7 @@
   }
   function syncSeg(box, value) { for (const b of box.children) b.setAttribute("aria-pressed", String(b.textContent === value)); }
   buildSeg($("segSize"), SIZES, () => size, (v) => (size = v));
-  let gender = "";
-  buildSeg($("segGender"), GENDERS, () => gender, (v) => (gender = v));
+
 
   // A full-width row with a tick box on the right.
   function checkRow(label, on, onChange, sub) {
@@ -360,7 +369,7 @@
     $("fDate").value = p ? (p.date || "") : (last.date || today());
     $("fNote").value = p ? p.note : "";
     size = p ? p.size : ""; syncSeg($("segSize"), size);
-    gender = p ? p.gender : ""; syncSeg($("segGender"), gender);
+    $("fNat").value = p ? p.nationality : "";
     $("fPhone").value = p ? p.phone : "";
     $("fInsta").value = p ? p.instagram : "";
     formCats = new Set(p ? p.categories : []);
@@ -392,7 +401,7 @@
     const its = {}; for (const it of items) if (formItems.has(it.id)) its[it.id] = 1;
     const data = {
       name: str($("fName").value, 80), gym: str($("fGym").value, 80),
-      gender: GENDERS.includes(gender) ? gender : "", phone: cleanPhone($("fPhone").value), instagram: cleanInsta($("fInsta").value),
+      nationality: cleanNat($("fNat").value), phone: cleanPhone($("fPhone").value), instagram: cleanInsta($("fInsta").value),
       categories: categories.filter((c) => formCats.has(c)).slice(0, 1), size: SIZES.includes(size) ? size : "",
       date: isDate($("fDate").value) ? $("fDate").value : "",
       note: str($("fNote").value, 1000), items: its, competitions: comps.filter((c) => formComps.has(c.id)).map((c) => c.id),
@@ -597,13 +606,10 @@
       const name = c[0].slice(0, 80), gym = (c[1] || "").slice(0, 80);
       const [size, sw] = normSize(c[6]);
       const cats = multi(c[5]);
-      const gRaw = (c[2] || "").trim(), gen = cleanGender(gRaw);
-      const row = { name, gym, gender: gen, phone: cleanPhone(c[3]), instagram: cleanInsta(c[4]),
+      const row = { name, gym, nationality: cleanNat(c[2]), phone: cleanPhone(c[3]), instagram: cleanInsta(c[4]),
         categories: cats.slice(0, 1), size, competitions: multi(c[7]), items: multi(c[8]),
-        note: c.slice(9).filter(Boolean).join(", ").slice(0, 1000), genderWarn: gRaw && !gen ? `gender "${gRaw}" not recognised` : "",
+        note: c.slice(9).filter(Boolean).join(", ").slice(0, 1000),
         warn: [sw, cats.length > 1 && `only one category allowed, kept "${cats[0]}"`].filter(Boolean), skip: "" };
-      if (row.genderWarn) row.warn.push(row.genderWarn);
-      delete row.genderWarn;
       const key = (name + "|" + gym).toLowerCase();
       if (!name) row.skip = "no name";
       else if (existing.has(key)) row.skip = "already in the list";
@@ -643,7 +649,7 @@
     for (const r of bulkRows.slice(0, 200)) {
       const li = el("li", r.skip ? "skip" : "");
       li.append(el("span", "p-name", (r.name || "(no name)") + (r.skip ? ` — skipped: ${r.skip}` : "")));
-      const sub = [r.gym, r.gender, r.categories.join(", "), r.size && "Size " + r.size, r.phone, r.instagram && "@" + r.instagram].filter(Boolean).join(" · ");
+      const sub = [r.gym, r.nationality, r.categories.join(", "), r.size && "Size " + r.size, r.phone, r.instagram && "@" + r.instagram].filter(Boolean).join(" · ");
       if (sub) li.append(el("span", "p-sub", sub));
       if (r.competitions.length) li.append(el("span", "p-sub", "Competitions: " + r.competitions.join(", ")));
       if (r.items.length) li.append(el("span", "p-sub", "Items: " + r.items.join(", ")));
@@ -690,9 +696,9 @@
 
   let pendingRender = false;
   function filtered() {
-    const q = $("qSearch").value.trim().toLowerCase(), g = $("qGym").value, cat = $("qCat").value, cm = $("qComp").value, gd = $("qGender").value;
-    return people.filter((p) => (!g || p.gym === g) && (!cat || p.categories.includes(cat)) && (!cm || p.comps.includes(cm)) && (!gd || p.gender === gd) &&
-      (!q || [p.name, p.gym, p.phone, p.instagram, ...compNames(p), p.note].join(" ").toLowerCase().includes(q)))
+    const q = $("qSearch").value.trim().toLowerCase(), g = $("qGym").value, cat = $("qCat").value, cm = $("qComp").value, nat = $("qNat").value;
+    return people.filter((p) => (!g || p.gym === g) && (!cat || p.categories.includes(cat)) && (!cm || p.comps.includes(cm)) && (!nat || p.nationality === nat) &&
+      (!q || [p.name, p.gym, p.nationality, p.phone, p.instagram, ...compNames(p), p.note].join(" ").toLowerCase().includes(q)))
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
   }
 
@@ -703,6 +709,9 @@
     const gyms = [...new Set(people.map((p) => p.gym).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     fillSelect($("qGym"), gyms.map((g) => [g, g]), "All gyms");
     fillSelect($("qCat"), categories.map((c) => [c, c]), "All categories");
+    const nats = [...new Set(people.map((p) => p.nationality).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    fillSelect($("qNat"), nats.map((n) => [n, n]), "All nationalities");
+    $("natList").replaceChildren(...[...new Set([...nats, ...NATIONALITIES])].map((v) => new Option(v)));
     fillSelect($("qComp"), comps.map((c) => [c.id, c.name]), "All competitions");
     syncFilterBtn();
     $("gymList").replaceChildren(...gyms.map((v) => new Option(v)));
@@ -740,7 +749,7 @@
     const initials = p.name.split(/\s+/).map((w) => Array.from(w)[0] || "").filter((c) => /[\p{L}\p{N}]/u.test(c)).slice(0, 2).join("").toUpperCase();
     const who = el("div", "who");
     who.append(el("div", "name", p.name),
-      el("div", "meta", [p.gym, p.categories.join(", "), p.gender, p.size].filter(Boolean).join(" · ") || "—"));
+      el("div", "meta", [p.gym, p.nationality, p.categories.join(", "), p.size].filter(Boolean).join(" · ") || "—"));
     row.append(avatar(p, initials), who,
       el("span", "score" + (items.length && given === items.length ? " full" : ""), `${given}/${items.length}`));
     row.addEventListener("click", () => { openId = openId === p.id ? null : p.id; armedDelete = null; render(); });
@@ -771,7 +780,7 @@
         "comp", async (id) => { if (!p.comps.includes(id)) await toggleComp(p, id); });
       const facts = el("div", "facts");
       const fact = (label, v) => { if (!v) return; const s = el("span", null, label + " "); s.append(el("b", null, v)); facts.append(s); };
-      fact("Gender", p.gender); fact("Size", p.size); fact("Date", fmtDate(p.date));
+      fact("Nationality", p.nationality); fact("Size", p.size); fact("Date", fmtDate(p.date));
       if (facts.childElementCount) d.append(facts);
       if (p.note) d.append(el("div", "note", p.note));
       const act = el("div", "actions");
@@ -786,11 +795,11 @@
     return li;
   }
 
-  for (const id of ["qSearch", "qGym", "qCat", "qComp", "qGender"]) $(id).addEventListener("input", render);
+  for (const id of ["qSearch", "qGym", "qCat", "qComp", "qNat"]) $(id).addEventListener("input", render);
   $("qSearch").addEventListener("input", () => renderEvents());
 
   // ---------- Filter panel ----------
-  const FILTERS = ["qCat", "qGender", "qGym", "qComp"];
+  const FILTERS = ["qCat", "qNat", "qGym", "qComp"];
   function syncFilterBtn() {
     const n = FILTERS.filter((id) => $(id).value).length;
     $("filterCount").textContent = String(n); $("filterCount").hidden = !n;
@@ -895,7 +904,7 @@
     if (!list.length) { toast("Nothing to export. Clear the filters or add athletes first."); return Promise.resolve(); }
     return (async () => {
       await loadPhotos();
-      const filters = [$("qCat").value && "Category: " + $("qCat").value, $("qGender").value && "Gender: " + $("qGender").value,
+      const filters = [$("qCat").value && "Category: " + $("qCat").value, $("qNat").value && "Nationality: " + $("qNat").value,
         $("qComp").value && "Competition: " + compName($("qComp").value), $("qGym").value && "Gym: " + $("qGym").value,
         $("qSearch").value.trim() && `Search: "${$("qSearch").value.trim()}"`].filter(Boolean);
       const chips = el("div", "rp-summary");
@@ -904,7 +913,7 @@
         const c = el("div", "rp-chip"); c.append(el("b", null, `${n}/${list.length}`), el("span", null, it.name)); chips.append(c);
       }
       const withPhotos = list.some((p) => photos.has(p.id));
-      const headCells = [["#", "num"], ...(withPhotos ? [["", "ph"]] : []), ["Athlete"], ["Gender", "c"], ["Category"], ["Size", "c"],
+      const headCells = [["#", "num"], ...(withPhotos ? [["", "ph"]] : []), ["Athlete"], ["Nationality"], ["Category"], ["Size", "c"],
         ...items.map((it) => [it.name, "c item"]), ["Contact"], ["Competitions"], ["Note"]];
       const rows = list.map((p, i) => {
         const tr = el("tr");
@@ -915,7 +924,7 @@
           tr.append(td);
         }
         const who = el("td", "who"); who.append(el("b", null, p.name)); if (p.gym) who.append(el("span", null, p.gym));
-        tr.append(who, el("td", "c", p.gender ? p.gender[0] : ""), el("td", null, p.categories.join(", ")), el("td", "c", p.size));
+        tr.append(who, el("td", null, p.nationality), el("td", null, p.categories.join(", ")), el("td", "c", p.size));
         for (const it of items) { const td = el("td", "c item"); td.append(el("span", p.items[it.id] ? "yes" : "no", p.items[it.id] ? "✓" : "–")); tr.append(td); }
         const ct = el("td", "txt nowrap"); if (p.phone) ct.append(el("div", null, p.phone)); if (p.instagram) ct.append(el("div", null, "@" + p.instagram));
         tr.append(ct, el("td", "txt", compNames(p).join(", ")), el("td", "txt", p.note));

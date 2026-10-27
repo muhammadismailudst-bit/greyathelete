@@ -84,7 +84,7 @@
       </div>
       <div class="filters" id="filters" hidden>
         <select id="qCat" aria-label="Filter by category"><option value="">All categories</option></select>
-        <select id="qGender" aria-label="Filter by gender"><option value="">All genders</option><option>Male</option><option>Female</option></select>
+        <select id="qNat" aria-label="Filter by nationality"><option value="">All nationalities</option></select>
         <select id="qGym" aria-label="Filter by gym"><option value="">All gyms</option></select>
         <select id="qComp" aria-label="Filter by competition"><option value="">All competitions</option></select>
         <button class="clear-filters" id="clearFilters" type="button" hidden>Clear filters</button>
@@ -125,7 +125,7 @@
       </div>
       <label class="field"><span class="lbl">Name</span><input id="fName" autocomplete="off" maxlength="80" placeholder="Full name"></label>
       <label class="field"><span class="lbl">Gym</span><input id="fGym" list="gymList" autocomplete="off" maxlength="80" placeholder="Gym name"></label>
-      <div class="field"><span class="lbl">Gender</span><div class="seg seg-2" id="segGender"></div></div>
+      <label class="field"><span class="lbl">Nationality</span><input id="fNat" list="natList" autocomplete="off" maxlength="40" placeholder="e.g. Qatari"></label>
       <div class="two">
         <label class="field"><span class="lbl">Phone</span><input id="fPhone" type="tel" inputmode="tel" autocomplete="off" maxlength="30" placeholder="+974 5555 1234"></label>
         <label class="field"><span class="lbl">Instagram</span><span class="at-wrap"><span class="at" aria-hidden="true">@</span><input id="fInsta" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="80" placeholder="username"></span></label>
@@ -180,17 +180,17 @@
     <div class="panel-body">
       <div class="help">
         <p>One athlete per line. Separate columns with commas, or paste rows straight from Excel or Google Sheets.</p>
-        <p class="fmt">Name, Gym, Gender, Phone, Instagram, Category, Size, Competitions, Items, Note</p>
+        <p class="fmt">Name, Gym, Nationality, Phone, Instagram, Category, Size, Competitions, Items, Note</p>
         <ul>
           <li>Only <b>Name</b> is required. Leave a column empty with <code>,,</code></li>
           <li>One category per athlete. Several competitions or items: separate with <code>;</code></li>
-          <li>Gender: Male or Female (M / F works). Size: XS to XXXL. Instagram: the username or profile link.</li>
+          <li>Size: XS to XXXL. Instagram: the username or profile link.</li>
           <li>New category, competition or item names are added to your lists.</li>
           <li>A header row and athletes already in the list are skipped.</li>
         </ul>
-        <pre class="example" id="bulkExample">Ali Khan, Iron Gym, Male, +974 5555 1234, ali.khan, Qatari, M, SBX Series; Savageline, Hand band; T-shirt, paid
-Sara Ahmed, Fit Hub, Female, 5566 7788, @sara.fit, Girls, S, Hyrox Doha, Flag; Badge,
-Omar Y, Iron Gym, M, , , Fan, L, , T-shirt, size to confirm</pre>
+        <pre class="example" id="bulkExample">Ali Khan, Iron Gym, Qatari, +974 5555 1234, ali.khan, Rx, M, SBX Series; Savageline, Hand band; T-shirt, paid
+Sara Ahmed, Fit Hub, Egyptian, 5566 7788, @sara.fit, Girls, S, Hyrox Doha, Flag; Badge,
+Omar Y, Iron Gym, Jordanian, , , Fan, L, , T-shirt, size to confirm</pre>
         <button type="button" class="btn-sm" id="bulkUseExample">Paste the example</button>
       </div>
       <label class="field"><span class="lbl">Your list</span><textarea id="bulkText" class="bulk-text" placeholder="Paste or type here" spellcheck="false"></textarea></label>
@@ -267,6 +267,7 @@ Omar Y, Iron Gym, M, , , Fan, L, , T-shirt, size to confirm</pre>
 
 <datalist id="gymList"></datalist>
 <datalist id="locList"></datalist>
+<datalist id="natList"></datalist>
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script src="config.js?v=dev"></script>

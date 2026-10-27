@@ -313,7 +313,7 @@ body[data-role="viewer"] .admin-only{display:none!important}
 #teamList .team-act{width:100%}
 #teamList .role-sel{flex:1}
 
-/* Contact & gender */
+/* Contact */
 .seg-2{grid-template-columns:1fr 1fr}
 .at-wrap{position:relative;display:block}
 .at-wrap .at{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}

@@ -41,8 +41,8 @@ Limits to know: everyone shares one PIN, so the app can't tell who changed what.
 Tap **⋯ → Bulk add** and paste one athlete per line (commas, or rows copied from Excel / Google Sheets):
 
 ```
-Name, Gym, Gender, Phone, Instagram, Category, Size, Competitions, Items, Note
-Ali Khan, Iron Gym, Male, +974 5555 1234, ali.khan, Qatari, M, SBX Series; Savageline, Hand band; T-shirt, paid
+Name, Gym, Nationality, Phone, Instagram, Category, Size, Competitions, Items, Note
+Ali Khan, Iron Gym, Qatari, +974 5555 1234, ali.khan, Rx, M, SBX Series; Savageline, Hand band; T-shirt, paid
 ```
 Only Name is required. One category per athlete. Separate several competitions or items with `;`. New category, competition or item names are added to the lists. A header row and athletes already in the list (same name and gym) are skipped. Up to 500 at a time.
 
