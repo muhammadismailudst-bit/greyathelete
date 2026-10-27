@@ -1,6 +1,34 @@
--- Kit Log v5: categories become an editable list (add / rename / delete), like items and races.
--- A person's categories stay in handouts.categories (names). Run after 004. Safe to run more than once.
+-- Kit Log v5: editable category list, competitions as a note, fixed item list, athlete photos.
+-- Run after 004. Safe to run more than once.
 
+-- Competitions: a free-text note per person (replaces the race tick list).
+-- Races already ticked are copied in as text, once.
+alter table public.handouts add column if not exists competitions text not null default ''
+  check (char_length(competitions) <= 2000);
+update public.handouts h
+   set competitions = (select string_agg(r.name, ', ' order by r.race_date nulls last, r.name)
+                         from public.races r where r.id = any(h.race_ids))
+ where h.competitions = '' and cardinality(h.race_ids) > 0;
+
+-- Photos: one small JPEG per person (resized in the browser), stored as a data URL.
+create table if not exists public.photos (
+  person_id   uuid primary key references public.handouts(id) on delete cascade,
+  data        text not null check (data like 'data:image/jpeg;base64,%' and char_length(data) <= 300000),
+  updated_at  timestamptz not null default now()
+);
+alter table public.photos enable row level security;
+revoke all on public.photos from public, anon, authenticated;
+
+-- Items: exactly Hand band, Flag, Badge, T-shirt.
+update public.items set name = 'Hand band' where id = 'headband';
+insert into public.items (id, name, sort) values
+  ('headband', 'Hand band', 1), ('flag', 'Flag', 2), ('badge', 'Badge', 3), ('tshirt', 'T-shirt', 4)
+on conflict (id) do update set sort = excluded.sort;
+update public.handouts set items = items - array(select id from public.items
+  where id not in ('headband', 'flag', 'badge', 'tshirt'));
+delete from public.items where id not in ('headband', 'flag', 'badge', 'tshirt');
+
+-- Categories:
 create table if not exists public.categories (
   name        text primary key check (char_length(name) between 1 and 40),
   sort        int not null default 0,
@@ -46,13 +74,11 @@ begin
     'people', coalesce((select jsonb_agg(jsonb_build_object(
                  'id', h.id, 'name', h.name, 'gym', h.gym,
                  'categories', to_jsonb(_clean_categories(to_jsonb(h.categories))), 'size', h.size,
-                 'date', h.given_on, 'note', h.note, 'items', _clean_items2(h.items),
-                 'races', to_jsonb(h.race_ids), 'created_at', h.created_at) order by h.created_at desc)
+                 'date', h.given_on, 'note', h.note, 'competitions', h.competitions,
+                 'items', _clean_items2(h.items),
+                 'photo', (select ph.updated_at from photos ph where ph.person_id = h.id),
+                 'created_at', h.created_at) order by h.created_at desc)
                from handouts h), '[]'::jsonb),
-    'races',  coalesce((select jsonb_agg(jsonb_build_object(
-                 'id', r.id, 'name', r.name, 'date', r.race_date, 'note', r.note)
-                 order by r.race_date desc nulls last, r.created_at desc)
-               from races r), '[]'::jsonb),
     'items',  coalesce((select jsonb_agg(jsonb_build_object('id', i.id, 'name', i.name)
                  order by i.sort, i.created_at)
                from items i), '[]'::jsonb),
@@ -111,7 +137,7 @@ create or replace function public.bulk_add_people(p_token uuid, p_people jsonb)
 returns jsonb language plpgsql security definer set search_path = public, extensions as $$
 declare
   p jsonb; e jsonb; v_name text; v_gym text; v_size text;
-  v_items jsonb; v_races uuid[]; v_cats text[]; x text; v_id text; v_rid uuid; v_qty int;
+  v_items jsonb; v_cats text[]; x text; v_id text; v_qty int;
   n_added int := 0; n_skipped int := 0;
 begin
   perform _require_session(p_token);
@@ -154,22 +180,77 @@ begin
       end loop;
     end if;
 
-    v_races := '{}';
-    if jsonb_typeof(p -> 'races') = 'array' then
-      for x in select jsonb_array_elements_text(p -> 'races') limit 50 loop
-        v_rid := _ensure_race(x);
-        if v_rid is not null and not v_rid = any(v_races) then v_races := v_races || v_rid; end if;
-      end loop;
-    end if;
-
-    insert into handouts (name, gym, categories, size, note, items, race_ids)
+    insert into handouts (name, gym, categories, size, note, competitions, items)
     values (v_name, v_gym, _clean_categories(to_jsonb(v_cats)), v_size,
-            left(trim(coalesce(p ->> 'note', '')), 1000), _clean_items2(v_items), v_races);
+            left(trim(coalesce(p ->> 'note', '')), 1000), left(trim(coalesce(p ->> 'competitions', '')), 2000),
+            _clean_items2(v_items));
     n_added := n_added + 1;
   end loop;
 
   return jsonb_build_object('added', n_added, 'skipped', n_skipped);
 end $$;
+
+-- data: name, gym, categories [..], size, date, note, competitions, items {id: 1}
+create or replace function public.save_person(p_token uuid, p_id uuid, p_data jsonb)
+returns uuid language plpgsql security definer set search_path = public, extensions as $$
+declare v_id uuid;
+begin
+  perform _require_session(p_token);
+  if p_id is null then
+    insert into handouts (name, gym, categories, size, given_on, note, competitions, items)
+    values (trim(coalesce(p_data ->> 'name', '')), trim(coalesce(p_data ->> 'gym', '')),
+            _clean_categories(p_data -> 'categories'), coalesce(p_data ->> 'size', ''),
+            nullif(p_data ->> 'date', '')::date, trim(coalesce(p_data ->> 'note', '')),
+            trim(coalesce(p_data ->> 'competitions', '')), _clean_items2(p_data -> 'items'))
+    returning id into v_id;
+  else
+    update handouts set
+      name = trim(coalesce(p_data ->> 'name', '')), gym = trim(coalesce(p_data ->> 'gym', '')),
+      categories = _clean_categories(p_data -> 'categories'), size = coalesce(p_data ->> 'size', ''),
+      given_on = nullif(p_data ->> 'date', '')::date, note = trim(coalesce(p_data ->> 'note', '')),
+      competitions = trim(coalesce(p_data ->> 'competitions', '')),
+      items = _clean_items2(p_data -> 'items'), updated_at = now()
+    where id = p_id returning id into v_id;
+    if v_id is null then raise exception 'not_found'; end if;
+  end if;
+  return v_id;
+end $$;
+
+-- Photos. p_data null removes the photo.
+create or replace function public.set_photo(p_token uuid, p_id uuid, p_data text)
+returns void language plpgsql security definer set search_path = public, extensions as $$
+begin
+  perform _require_session(p_token);
+  if not exists (select 1 from handouts where id = p_id) then raise exception 'not_found'; end if;
+  if p_data is null then
+    delete from photos where person_id = p_id;
+  else
+    if p_data not like 'data:image/jpeg;base64,%' or char_length(p_data) > 300000
+       or substr(p_data, 24) !~ '^[A-Za-z0-9+/]+={0,2}$' then
+      raise exception 'bad_photo';
+    end if;
+    insert into photos (person_id, data) values (p_id, p_data)
+      on conflict (person_id) do update set data = excluded.data, updated_at = now();
+  end if;
+end $$;
+
+-- p_ids: which photos to fetch (the app asks only for ones it hasn't cached). Max 100 per call.
+create or replace function public.get_photos(p_token uuid, p_ids uuid[])
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+begin
+  perform _require_session(p_token);
+  return coalesce((select jsonb_object_agg(person_id, data)
+                     from photos where person_id = any(p_ids[1:100])), '{}'::jsonb);
+end $$;
+
+revoke execute on function public.save_person(uuid, uuid, jsonb), public.set_photo(uuid, uuid, text),
+  public.get_photos(uuid, uuid[]) from public, anon, authenticated;
+grant execute on function public.save_person(uuid, uuid, jsonb), public.set_photo(uuid, uuid, text),
+  public.get_photos(uuid, uuid[]) to anon, authenticated;
+
+-- The race tick list is gone from the app; stop it from being called.
+revoke execute on function public.toggle_race(uuid, uuid, uuid, boolean), public.save_race(uuid, uuid, text, date, text),
+  public.delete_race(uuid, uuid) from public, anon, authenticated;
 
 revoke execute on function public._clean_categories(jsonb), public._ensure_category(text),
   public.list_all(uuid), public.toggle_category(uuid, uuid, text, boolean),
