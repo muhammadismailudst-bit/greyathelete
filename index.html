@@ -61,6 +61,7 @@
       <div class="filters">
         <select id="qCat" aria-label="Filter by category"><option value="">All categories</option></select>
         <select id="qGym" aria-label="Filter by gym"><option value="">All gyms</option></select>
+        <select id="qComp" aria-label="Filter by competition"><option value="">All competitions</option></select>
       </div>
     </div>
   </header>
@@ -96,7 +97,7 @@
       <div class="field"><span class="lbl">Category · الفئة</span><div class="checklist tick-list single" id="catChecklist"></div></div>
       <div class="field"><span class="lbl">T-shirt size</span><div class="seg" id="segSize"></div></div>
       <div class="field"><span class="lbl">Items given</span><div class="checklist tick-list" id="checklist"></div></div>
-      <label class="field"><span class="lbl">Competitions</span><textarea id="fComp" maxlength="2000" placeholder="e.g. SBX Series 2026, Hyrox Doha"></textarea></label>
+      <div class="field"><span class="lbl">Competitions</span><div class="checklist tick-list" id="compChecklist"></div></div>
       <label class="field"><span class="lbl">Date</span><input id="fDate" type="date"></label>
       <label class="field"><span class="lbl">Note</span><textarea id="fNote" maxlength="1000" placeholder="Optional"></textarea></label>
       <div class="msg" id="formMsg" role="status"></div>
@@ -121,7 +122,7 @@
           <li>Only <b>Name</b> is required. Leave a column empty with <code>,,</code></li>
           <li>One category per athlete. Several competitions or items: separate with <code>;</code></li>
           <li>Size: XS to XXXL.</li>
-          <li>New category or item names are added to your lists.</li>
+          <li>New category, competition or item names are added to your lists.</li>
           <li>A header row and athletes already in the list are skipped.</li>
         </ul>
         <pre class="example" id="bulkExample">Ali Khan, Iron Gym, Qatari, M, SBX Series; Savageline, Hand band; T-shirt, paid
@@ -145,6 +146,14 @@ Omar Y, Iron Gym, Fan, L, , T-shirt, size to confirm</pre>
       <button type="button" class="link strong" id="manageClose">Done</button>
     </div>
     <div class="panel-body">
+      <section class="field">
+        <span class="lbl">Competitions</span>
+        <form class="add-row add-row-2" id="compAdd" novalidate>
+          <input id="newComp" maxlength="60" placeholder="New competition, e.g. SBX Series 2026" autocomplete="off" aria-label="New competition name">
+          <button class="btn-sm dark" type="submit">Add</button>
+        </form>
+        <ul class="manage-list" id="compList"></ul>
+      </section>
       <section class="field">
         <span class="lbl">Categories · الفئة</span>
         <form class="add-row add-row-2" id="catAdd" novalidate>

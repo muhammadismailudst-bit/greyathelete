@@ -55,13 +55,13 @@
   }
 
   // ---------- State ----------
-  let people = [], items = [], categories = [];
+  let people = [], items = [], categories = [], comps = [];   // comps: [{id, name}]
   const photos = new Map();                 // personId -> { ts, data } (data URL)
   let editingId = null, openId = null, armedDelete = null;
-  let size = "", formCats = new Set(), formItems = new Set();
+  let size = "", formCats = new Set(), formItems = new Set(), formComps = new Set();
   let formPhoto = { changed: false, data: null };
   let last = { date: "", gym: "" };
-  let manageEditing = null;                 // "item:<id>" | "cat:<name>"
+  let manageEditing = null;                 // "item:<id>" | "cat:<name>" | "comp:<id>"
   let loadSeq = 0, timer = null;
 
 
@@ -77,7 +77,7 @@
     if (callServer && token) rpc("logout", { p_token: token }).catch(() => {});
     saveToken(null);
     clearInterval(timer); timer = null;
-    people = []; items = []; categories = []; photos.clear(); openId = null;
+    people = []; items = []; categories = []; comps = []; photos.clear(); openId = null;
     closeSheet(); closeManage(); $("bulk").hidden = true;
     $("list").replaceChildren();
     $("pin").value = ""; $("loginMsg").textContent = "";
@@ -119,7 +119,7 @@
     if (d.items && typeof d.items === "object") for (const k of Object.keys(d.items)) if (d.items[k] === true || d.items[k] > 0) its[k] = true;
     return {
       id: String(d.id), items: its,
-      competitions: str(d.competitions, 2000), photoTs: typeof d.photo === "string" ? d.photo : "",
+      comps: Array.isArray(d.competitions) ? d.competitions.map(String) : [], photoTs: typeof d.photo === "string" ? d.photo : "",
       name: str(d.name, 80) || "Unnamed", gym: str(d.gym, 80), categories: Array.isArray(d.categories) ? d.categories.map((c) => str(c, 40)).filter(Boolean) : [], size: str(d.size, 10),
       date: str(d.date, 10), note: str(d.note, 1000), createdAt: Date.parse(d.created_at) || 0,
     };
@@ -133,6 +133,7 @@
       people = (Array.isArray(data && data.people) ? data.people : []).map(cleanPerson);
       items = (Array.isArray(data && data.items) ? data.items : []).map((i) => ({ id: String(i.id), name: str(i.name, 40) }));
       categories = (Array.isArray(data && data.categories) ? data.categories : []).map((c) => str(c, 40)).filter(Boolean);
+      comps = (Array.isArray(data && data.competitions) ? data.competitions : []).map((r) => ({ id: String(r.id), name: str(r.name, 60) }));
       if (openId && !people.some((p) => p.id === openId)) openId = null;
       setStatus("");
       render();
@@ -192,7 +193,13 @@
   }
 
   // Find-or-create for each list. Each returns the key used on a person (item id or category name).
+  const compName = (id) => (comps.find((c) => c.id === id) || {}).name || "";
+  const compNames = (p) => comps.filter((c) => p.comps.includes(c.id)).map((c) => c.name);
+
   const LISTS = {
+    comp: { word: "competition", max: 60,
+      find: (n) => comps.find((c) => c.name.toLowerCase() === n.toLowerCase())?.id,
+      create: async (n) => { const id = String(await call("save_race", { p_id: null, p_name: n, p_date: null, p_note: "" })); comps = [...comps, { id, name: n }]; return id; } },
     item: { word: "item", max: 40,
       find: (n) => items.find((i) => i.name.toLowerCase() === n.toLowerCase())?.id,
       create: async (n) => { const id = String(await call("save_item", { p_id: null, p_name: n })); items = [...items, { id, name: n }]; return id; } },
@@ -231,6 +238,11 @@
     const box = $("catChecklist"); box.replaceChildren();
     for (const c of categories) box.append(checkRow(c, formCats.has(c), (on) => { formCats = new Set(on ? [c] : []); renderFormCats(); }));
     box.append(addRow("cat", async (c) => { formCats = new Set([c]); renderFormCats(); }));
+  }
+  function renderFormComps() {
+    const box = $("compChecklist"); box.replaceChildren();
+    for (const c of comps) box.append(checkRow(c.name, formComps.has(c.id), (on) => { on ? formComps.add(c.id) : formComps.delete(c.id); renderFormComps(); }));
+    box.append(addRow("comp", async (id) => { formComps.add(id); renderFormComps(); }));
   }
   function renderFormItems() {
     const box = $("checklist"); box.replaceChildren();
@@ -280,7 +292,8 @@
     size = p ? p.size : ""; syncSeg($("segSize"), size);
     formCats = new Set(p ? p.categories : []);
     renderFormCats();
-    $("fComp").value = p ? p.competitions : "";
+    formComps = new Set(p ? p.comps : []);
+    renderFormComps();
     formPhoto = { changed: false, data: p && photos.has(p.id) ? photos.get(p.id).data : null };
     renderFormPhoto();
     formItems = new Set(p ? Object.keys(p.items) : []);
@@ -308,7 +321,7 @@
       name: str($("fName").value, 80), gym: str($("fGym").value, 80),
       categories: categories.filter((c) => formCats.has(c)).slice(0, 1), size: SIZES.includes(size) ? size : "",
       date: isDate($("fDate").value) ? $("fDate").value : "",
-      note: str($("fNote").value, 1000), items: its, competitions: str($("fComp").value, 2000),
+      note: str($("fNote").value, 1000), items: its, competitions: comps.filter((c) => formComps.has(c.id)).map((c) => c.id),
     };
     if (!data.name) { $("formMsg").textContent = "Enter a name."; $("fName").focus(); return; }
     const b = $("saveBtn"); b.disabled = true;
@@ -348,6 +361,14 @@
     catch (err) { load(); if (err.code !== "locked") toast(errorText(err)); }
   }
 
+  async function toggleComp(p, id) {
+    const on = !p.comps.includes(id);
+    p.comps = on ? [...p.comps, id] : p.comps.filter((x) => x !== id);
+    render();
+    try { await call("toggle_race", { p_id: p.id, p_race: id, p_value: on }); load(); }
+    catch (err) { load(); if (err.code !== "locked") toast(errorText(err)); }
+  }
+
   async function toggleCat(p, name) {
     const on = !p.categories.includes(name);
     p.categories = on ? [name] : [];
@@ -369,6 +390,11 @@
     catch (err) { if (err.code !== "locked") $("manageMsg").textContent = errorText(err); return false; }
   }
 
+  $("compAdd").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = str($("newComp").value, 60); if (!name) { $("newComp").focus(); return; }
+    if (await manageCall("save_race", { p_id: null, p_name: name, p_date: null, p_note: "" }, "Added " + name)) $("newComp").value = "";
+  });
   $("catAdd").addEventListener("submit", async (e) => {
     e.preventDefault();
     const name = str($("newCat").value, 40); if (!name) { $("newCat").focus(); return; }
@@ -381,6 +407,30 @@
   });
 
   function renderManage() {
+    const ml = $("compList"); ml.replaceChildren();
+    for (const c of comps) {
+      const used = people.filter((p) => p.comps.includes(c.id)).length;
+      const li = el("li");
+      if (manageEditing === "comp:" + c.id) {
+        const f = el("div", "m-edit");
+        const n = document.createElement("input"); n.maxLength = 60; n.value = c.name; n.setAttribute("aria-label", "Competition name");
+        const act = el("div", "actions");
+        act.append(btn("btn-sm", "Cancel", () => { manageEditing = null; armedDelete = null; renderManage(); }),
+          btn("btn-sm dark", "Save", () => { const nm = str(n.value, 60); if (!nm) { n.focus(); return; } manageCall("save_race", { p_id: c.id, p_name: nm, p_date: null, p_note: "" }, "Saved " + nm); }),
+          btn("btn-sm danger push", armedDelete === "comp:" + c.id ? `Tap again (removes from ${used})` : "Delete", () => {
+            if (armedDelete !== "comp:" + c.id) { armedDelete = "comp:" + c.id; renderManage(); return; }
+            manageCall("delete_race", { p_id: c.id }, "Deleted " + c.name);
+          }));
+        f.append(n, act); li.append(f);
+      } else {
+        const row = el("div", "m-row");
+        const nm = el("div", "m-name", c.name); nm.append(el("div", "m-sub", used + (used === 1 ? " athlete" : " athletes")));
+        row.append(nm, btn("btn-sm", "Edit", () => { manageEditing = "comp:" + c.id; armedDelete = null; renderManage(); }));
+        li.append(row);
+      }
+      ml.append(li);
+    }
+
     const cl = $("catList"); cl.replaceChildren();
     for (const c of categories) {
       const used = people.filter((p) => p.categories.includes(c)).length;
@@ -473,7 +523,7 @@
       const name = c[0].slice(0, 80), gym = (c[1] || "").slice(0, 80);
       const [size, sw] = normSize(c[3]);
       const cats = multi(c[2]);
-      const row = { name, gym, categories: cats.slice(0, 1), size, competitions: multi(c[4]).join(", ").slice(0, 2000), items: multi(c[5]),
+      const row = { name, gym, categories: cats.slice(0, 1), size, competitions: multi(c[4]), items: multi(c[5]),
         note: c.slice(6).filter(Boolean).join(", ").slice(0, 1000),
         warn: [sw, cats.length > 1 && `only one category allowed, kept "${cats[0]}"`].filter(Boolean), skip: "" };
       const key = (name + "|" + gym).toLowerCase();
@@ -495,11 +545,13 @@
     $("bulkMsg").textContent = add.length > BULK_MAX ? `That's ${add.length} people. Add at most ${BULK_MAX} at a time.` : "";
     if (!bulkRows.length) return;
 
-    const knownI = new Set(items.map((i) => i.name.toLowerCase())), knownC = new Set(categories.map((c) => c.toLowerCase()));
+    const knownI = new Set(items.map((i) => i.name.toLowerCase())), knownC = new Set(categories.map((c) => c.toLowerCase())), knownM = new Set(comps.map((c) => c.name.toLowerCase()));
+    const newM = new Map();
     const newI = new Map(), newC = new Map();
     for (const r of add) {
       for (const x of r.items) if (!knownI.has(x.toLowerCase())) newI.set(x.toLowerCase(), x);
       for (const x of r.categories) if (!knownC.has(x.toLowerCase())) newC.set(x.toLowerCase(), x);
+      for (const x of r.competitions) if (!knownM.has(x.toLowerCase())) newM.set(x.toLowerCase(), x);
     }
     const wrap = el("div", "preview");
     const head = el("div", "preview-head");
@@ -507,6 +559,7 @@
     head.append(el("b", null, `${add.length} to add` + (skipped ? ` · ${skipped} skipped` : "")));
     if (newI.size) head.append(el("span", null, "New items: " + [...newI.values()].join(", ")));
     if (newC.size) head.append(el("span", null, "New categories: " + [...newC.values()].join(", ")));
+    if (newM.size) head.append(el("span", null, "New competitions: " + [...newM.values()].join(", ")));
     wrap.append(head);
     const ul = el("ul");
     for (const r of bulkRows.slice(0, 200)) {
@@ -514,7 +567,7 @@
       li.append(el("span", "p-name", (r.name || "(no name)") + (r.skip ? ` — skipped: ${r.skip}` : "")));
       const sub = [r.gym, r.categories.join(", "), r.size && "Size " + r.size].filter(Boolean).join(" · ");
       if (sub) li.append(el("span", "p-sub", sub));
-      if (r.competitions) li.append(el("span", "p-sub", "Competitions: " + r.competitions));
+      if (r.competitions.length) li.append(el("span", "p-sub", "Competitions: " + r.competitions.join(", ")));
       if (r.items.length) li.append(el("span", "p-sub", "Items: " + r.items.join(", ")));
       if (r.note) li.append(el("span", "p-sub", "Note: " + r.note));
       for (const w of r.warn) li.append(el("span", "p-sub warn", w.startsWith("only one") ? w : w + " (left blank)"));
@@ -559,9 +612,9 @@
 
   let pendingRender = false;
   function filtered() {
-    const q = $("qSearch").value.trim().toLowerCase(), g = $("qGym").value, cat = $("qCat").value;
-    return people.filter((p) => (!g || p.gym === g) && (!cat || p.categories.includes(cat)) &&
-      (!q || [p.name, p.gym, p.competitions, p.note].join(" ").toLowerCase().includes(q)))
+    const q = $("qSearch").value.trim().toLowerCase(), g = $("qGym").value, cat = $("qCat").value, cm = $("qComp").value;
+    return people.filter((p) => (!g || p.gym === g) && (!cat || p.categories.includes(cat)) && (!cm || p.comps.includes(cm)) &&
+      (!q || [p.name, p.gym, ...compNames(p), p.note].join(" ").toLowerCase().includes(q)))
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
   }
 
@@ -572,6 +625,7 @@
     const gyms = [...new Set(people.map((p) => p.gym).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     fillSelect($("qGym"), gyms.map((g) => [g, g]), "All gyms");
     fillSelect($("qCat"), categories.map((c) => [c, c]), "All categories");
+    fillSelect($("qComp"), comps.map((c) => [c.id, c.name]), "All competitions");
     $("gymList").replaceChildren(...gyms.map((v) => new Option(v)));
 
     const shown = filtered();
@@ -623,7 +677,8 @@
         "cat", async (c) => { if (!p.categories.includes(c)) await toggleCat(p, c); });
       section("Items given", items.map((it) => checkRow(it.name, !!p.items[it.id], () => toggleItem(p, it.id))),
         "item", async (id) => { if (!p.items[id]) await toggleItem(p, id); });
-      if (p.competitions) { d.append(el("div", "sec-lbl", "Competitions")); d.append(el("div", "note", p.competitions)); }
+      section("Competitions", comps.map((c) => checkRow(c.name, p.comps.includes(c.id), () => toggleComp(p, c.id))),
+        "comp", async (id) => { if (!p.comps.includes(id)) await toggleComp(p, id); });
       const facts = el("div", "facts");
       const fact = (label, v) => { if (!v) return; const s = el("span", null, label + " "); s.append(el("b", null, v)); facts.append(s); };
       fact("Size", p.size); fact("Date", fmtDate(p.date));
@@ -641,7 +696,7 @@
     return li;
   }
 
-  for (const id of ["qSearch", "qGym", "qCat"]) $(id).addEventListener("input", render);
+  for (const id of ["qSearch", "qGym", "qCat", "qComp"]) $(id).addEventListener("input", render);
 
   // ---------- PDF report ----------
   // Builds a print-only page and opens the system print dialog ("Save as PDF" / Share → Save to Files).
@@ -653,7 +708,7 @@
     const now = new Date();
     meta.append(el("div", "rp-title", "Athlete kit report"),
       el("div", "rp-sub", now.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) + " · " + list.length + (list.length === 1 ? " athlete" : " athletes")));
-    const filters = [$("qCat").value && "Category: " + $("qCat").value, $("qGym").value && "Gym: " + $("qGym").value,
+    const filters = [$("qCat").value && "Category: " + $("qCat").value, $("qComp").value && "Competition: " + compName($("qComp").value), $("qGym").value && "Gym: " + $("qGym").value,
       $("qSearch").value.trim() && `Search: "${$("qSearch").value.trim()}"`].filter(Boolean);
     if (filters.length) meta.append(el("div", "rp-sub", filters.join(" · ")));
     head.append(logo, meta);
@@ -690,7 +745,7 @@
       const who = el("td", "who"); who.append(el("b", null, p.name)); if (p.gym) who.append(el("span", null, p.gym));
       tr.append(who, el("td", null, p.categories.join(", ")), el("td", "c", p.size));
       for (const it of items) { const td = el("td", "c item"); td.append(el("span", p.items[it.id] ? "yes" : "no", p.items[it.id] ? "✓" : "–")); tr.append(td); }
-      tr.append(el("td", "txt", p.competitions), el("td", "txt", p.note));
+      tr.append(el("td", "txt", compNames(p).join(", ")), el("td", "txt", p.note));
       tb.append(tr);
     });
     t.append(tb);

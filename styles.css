@@ -261,3 +261,6 @@ label.btn-sm{display:inline-flex;align-items:center}
 .stats{font-size:13px;color:var(--muted);padding-top:14px;font-variant-numeric:tabular-nums}
 .stats:empty{display:none}
 @media (max-width:360px){.logo-light{height:38px}.add-btn{padding:11px 16px}}
+
+/* third filter (competitions) spans the row */
+#qComp{grid-column:1/-1}
