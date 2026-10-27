@@ -1,0 +1,182 @@
+-- Kit Log v5: categories become an editable list (add / rename / delete), like items and races.
+-- A person's categories stay in handouts.categories (names). Run after 004. Safe to run more than once.
+
+create table if not exists public.categories (
+  name        text primary key check (char_length(name) between 1 and 40),
+  sort        int not null default 0,
+  created_at  timestamptz not null default now()
+);
+create unique index if not exists categories_name_key on public.categories (lower(name));
+alter table public.categories enable row level security;
+revoke all on public.categories from public, anon, authenticated;
+
+insert into public.categories (name, sort) values
+  ('Qatari', 1), ('Rx', 2), ('Girls', 3), ('Master', 4), ('Fan', 5), ('Bartender', 6)
+on conflict do nothing;
+
+-- Keep only categories that exist (any case in, stored spelling out), in list order.
+create or replace function public._clean_categories(p jsonb)
+returns text[] language sql stable security definer set search_path = public, pg_catalog as $$
+  select coalesce(array_agg(c.name order by c.sort, c.created_at), '{}')
+  from categories c
+  where jsonb_typeof(p) = 'array'
+    and exists (select 1 from jsonb_array_elements_text(p) x where lower(trim(x)) = lower(c.name));
+$$;
+
+-- Find a category by name (any case), creating it if missing.
+create or replace function public._ensure_category(p_name text)
+returns text language plpgsql security definer set search_path = public, extensions as $$
+declare v_name text := left(trim(coalesce(p_name, '')), 40); v_found text;
+begin
+  if v_name = '' then return null; end if;
+  select name into v_found from categories where lower(name) = lower(v_name);
+  if v_found is null then
+    insert into categories (name, sort) values (v_name, coalesce((select max(sort) from categories), 0) + 1)
+      on conflict do nothing;
+    select name into v_found from categories where lower(name) = lower(v_name);
+  end if;
+  return v_found;
+end $$;
+
+create or replace function public.list_all(p_token uuid)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+begin
+  perform _require_session(p_token);
+  return jsonb_build_object(
+    'people', coalesce((select jsonb_agg(jsonb_build_object(
+                 'id', h.id, 'name', h.name, 'gym', h.gym,
+                 'categories', to_jsonb(_clean_categories(to_jsonb(h.categories))), 'size', h.size,
+                 'date', h.given_on, 'note', h.note, 'items', _clean_items2(h.items),
+                 'races', to_jsonb(h.race_ids), 'created_at', h.created_at) order by h.created_at desc)
+               from handouts h), '[]'::jsonb),
+    'races',  coalesce((select jsonb_agg(jsonb_build_object(
+                 'id', r.id, 'name', r.name, 'date', r.race_date, 'note', r.note)
+                 order by r.race_date desc nulls last, r.created_at desc)
+               from races r), '[]'::jsonb),
+    'items',  coalesce((select jsonb_agg(jsonb_build_object('id', i.id, 'name', i.name)
+                 order by i.sort, i.created_at)
+               from items i), '[]'::jsonb),
+    'categories', coalesce((select jsonb_agg(c.name order by c.sort, c.created_at) from categories c), '[]'::jsonb));
+end $$;
+
+-- Tick or untick one category on a person.
+create or replace function public.toggle_category(p_token uuid, p_id uuid, p_name text, p_value boolean)
+returns void language plpgsql security definer set search_path = public, extensions as $$
+declare v_name text;
+begin
+  perform _require_session(p_token);
+  select name into v_name from categories where lower(name) = lower(trim(coalesce(p_name, '')));
+  if v_name is null then raise exception 'not_found'; end if;
+  update handouts
+     set categories = case when p_value
+                           then _clean_categories(to_jsonb(array_remove(categories, v_name) || v_name))
+                           else array_remove(categories, v_name) end,
+         updated_at = now()
+   where id = p_id;
+end $$;
+
+-- p_old null = add. Otherwise rename (people keep it under the new name).
+create or replace function public.save_category(p_token uuid, p_old text, p_name text)
+returns text language plpgsql security definer set search_path = public, extensions as $$
+declare v_name text := left(trim(coalesce(p_name, '')), 40); v_old text;
+begin
+  perform _require_session(p_token);
+  if v_name = '' then raise exception 'bad_name'; end if;
+  if p_old is not null then
+    select name into v_old from categories where name = p_old;
+    if v_old is null then raise exception 'not_found'; end if;
+  end if;
+  if exists (select 1 from categories where lower(name) = lower(v_name) and name is distinct from v_old) then
+    raise exception 'duplicate_name';
+  end if;
+  if v_old is null then
+    insert into categories (name, sort) values (v_name, coalesce((select max(sort) from categories), 0) + 1);
+  elsif v_old <> v_name then
+    update categories set name = v_name where name = v_old;
+    update handouts set categories = array_replace(categories, v_old, v_name) where v_old = any(categories);
+  end if;
+  return v_name;
+end $$;
+
+create or replace function public.delete_category(p_token uuid, p_name text)
+returns void language plpgsql security definer set search_path = public, extensions as $$
+begin
+  perform _require_session(p_token);
+  update handouts set categories = array_remove(categories, p_name) where p_name = any(categories);
+  delete from categories where name = p_name;
+end $$;
+
+-- Bulk add: same as v4, but new category names are added to the list.
+create or replace function public.bulk_add_people(p_token uuid, p_people jsonb)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare
+  p jsonb; e jsonb; v_name text; v_gym text; v_size text;
+  v_items jsonb; v_races uuid[]; v_cats text[]; x text; v_id text; v_rid uuid; v_qty int;
+  n_added int := 0; n_skipped int := 0;
+begin
+  perform _require_session(p_token);
+  if jsonb_typeof(p_people) <> 'array' then raise exception 'bad_input'; end if;
+  if jsonb_array_length(p_people) > 500 then raise exception 'too_many_rows'; end if;
+
+  for p in select * from jsonb_array_elements(p_people) loop
+    v_name := left(trim(coalesce(p ->> 'name', '')), 80);
+    if v_name = '' then n_skipped := n_skipped + 1; continue; end if;
+    v_gym := left(trim(coalesce(p ->> 'gym', '')), 80);
+    if exists (select 1 from handouts where lower(name) = lower(v_name) and lower(gym) = lower(v_gym)) then
+      n_skipped := n_skipped + 1; continue;
+    end if;
+    v_size := upper(coalesce(p ->> 'size', ''));
+    if v_size not in ('XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL') then v_size := ''; end if;
+
+    v_cats := '{}';
+    if jsonb_typeof(p -> 'categories') = 'array' then
+      for x in select jsonb_array_elements_text(p -> 'categories') limit 20 loop
+        x := _ensure_category(x);
+        if x is not null and not x = any(v_cats) then v_cats := v_cats || x; end if;
+      end loop;
+    end if;
+
+    v_items := '{}'::jsonb;
+    if jsonb_typeof(p -> 'items') = 'array' then
+      for e in select * from jsonb_array_elements(p -> 'items') limit 50 loop
+        if jsonb_typeof(e) = 'object' then
+          x := e ->> 'name';
+          v_qty := case when jsonb_typeof(e -> 'qty') = 'number' then floor((e ->> 'qty')::numeric)::int else 1 end;
+        else
+          x := e #>> '{}'; v_qty := 1;
+        end if;
+        v_qty := least(greatest(v_qty, 0), 999);
+        if v_qty = 0 then continue; end if;
+        v_id := _ensure_item(x);
+        if v_id is not null then
+          v_items := v_items || jsonb_build_object(v_id, coalesce((v_items ->> v_id)::int, 0) + v_qty);
+        end if;
+      end loop;
+    end if;
+
+    v_races := '{}';
+    if jsonb_typeof(p -> 'races') = 'array' then
+      for x in select jsonb_array_elements_text(p -> 'races') limit 50 loop
+        v_rid := _ensure_race(x);
+        if v_rid is not null and not v_rid = any(v_races) then v_races := v_races || v_rid; end if;
+      end loop;
+    end if;
+
+    insert into handouts (name, gym, categories, size, note, items, race_ids)
+    values (v_name, v_gym, _clean_categories(to_jsonb(v_cats)), v_size,
+            left(trim(coalesce(p ->> 'note', '')), 1000), _clean_items2(v_items), v_races);
+    n_added := n_added + 1;
+  end loop;
+
+  return jsonb_build_object('added', n_added, 'skipped', n_skipped);
+end $$;
+
+revoke execute on function public._clean_categories(jsonb), public._ensure_category(text),
+  public.list_all(uuid), public.toggle_category(uuid, uuid, text, boolean),
+  public.save_category(uuid, text, text), public.delete_category(uuid, text),
+  public.bulk_add_people(uuid, jsonb)
+from public, anon, authenticated;
+grant execute on function public.list_all(uuid), public.toggle_category(uuid, uuid, text, boolean),
+  public.save_category(uuid, text, text), public.delete_category(uuid, text),
+  public.bulk_add_people(uuid, jsonb)
+to anon, authenticated;

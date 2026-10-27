@@ -46,7 +46,7 @@
             <button class="icon-btn" id="menuBtn" type="button" aria-label="More" aria-haspopup="true" aria-expanded="false">⋯</button>
             <div class="menu" id="menu" role="menu" hidden>
               <button type="button" role="menuitem" id="bulkBtn">Bulk add</button>
-              <button type="button" role="menuitem" id="manageBtn">Races &amp; items</button>
+              <button type="button" role="menuitem" id="manageBtn">Edit lists</button>
               <button type="button" role="menuitem" id="lockBtn">Lock</button>
             </div>
           </div>
@@ -106,13 +106,12 @@
         <p class="fmt">Name, Gym, Category, Size, Races, Items, Note</p>
         <ul>
           <li>Only <b>Name</b> is required. Leave a column empty with <code>,,</code></li>
-          <li>Several races or items: separate with <code>;</code></li>
-          <li>Quantity: <code>T-shirt x2</code></li>
-          <li>Category: Qatari, Rx, Girls, Master, Fan, Bartender (several with <code>;</code>). Size: XS to XXXL.</li>
-          <li>New race or item names are added to your lists.</li>
+          <li>Several categories, races or items: separate with <code>;</code></li>
+          <li>Size: XS to XXXL.</li>
+          <li>New category, race or item names are added to your lists.</li>
           <li>A header row and people already in the list are skipped.</li>
         </ul>
-        <pre class="example" id="bulkExample">Ali Khan, Iron Gym, Qatari; Rx, M, Hyrox Dubai; T-100, Bag; T-shirt x2, paid
+        <pre class="example" id="bulkExample">Ali Khan, Iron Gym, Qatari; Rx, M, Hyrox Dubai; T-100, Bag; T-shirt, paid
 Sara Ahmed, Fit Hub, Girls, S, T-100, Head band; Bag; Medal,
 Omar Y, Iron Gym, , L, , T-shirt, size to confirm</pre>
         <button type="button" class="btn-sm" id="bulkUseExample">Paste the example</button>
@@ -129,7 +128,7 @@ Omar Y, Iron Gym, , L, , T-shirt, size to confirm</pre>
   <div class="panel">
     <div class="panel-head">
       <span class="head-spacer"></span>
-      <h2 id="manageTitle">Races &amp; items</h2>
+      <h2 id="manageTitle">Edit lists</h2>
       <button type="button" class="link strong" id="manageClose">Done</button>
     </div>
     <div class="panel-body">
@@ -143,8 +142,16 @@ Omar Y, Iron Gym, , L, , T-shirt, size to confirm</pre>
         <ul class="manage-list" id="raceList"></ul>
       </section>
       <section class="field">
+        <span class="lbl">Categories · الفئة</span>
+        <form class="add-row add-row-2" id="catAdd" novalidate>
+          <input id="newCat" maxlength="40" placeholder="New category, e.g. Kids" autocomplete="off" aria-label="New category name">
+          <button class="btn-sm dark" type="submit">Add</button>
+        </form>
+        <ul class="manage-list" id="catList"></ul>
+      </section>
+      <section class="field">
         <span class="lbl">Items</span>
-        <form class="add-row" id="itemAdd" novalidate>
+        <form class="add-row add-row-2" id="itemAdd" novalidate>
           <input id="newItem" maxlength="40" placeholder="New item, e.g. Medal" autocomplete="off" aria-label="New item name">
           <button class="btn-sm dark" type="submit">Add</button>
         </form>
