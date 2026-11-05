@@ -329,3 +329,7 @@ body[data-role="viewer"] .admin-only{display:none!important}
 .row{gap:10px}
 .detail{padding-left:84px}
 @media (max-width:380px){.detail{padding-left:0}}
+
+.ev-sheet-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ev-sheet-actions a.btn-sm{text-decoration:none;display:inline-flex;align-items:center}
+.small-note{font-size:13px;margin:0}

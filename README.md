@@ -50,8 +50,18 @@ Only Name is required. One category per athlete. Separate several competitions o
 - **Photos:** in Add/Edit, tap **Add photo**. The photo is cropped square and shrunk to about 480px before upload, then stored in the `photos` table.
 - **Export PDF:** **⋯ → Export PDF** builds an A4 landscape PDF of the athletes currently shown (search and filters apply), or of the events on the Events tab, with the logo, ticks, totals and page numbers. It is made in the browser (jsPDF + html2canvas in `vendor/`), so there is no print dialog and no browser date/URL on the pages. On phones it opens the Share sheet; on computers it downloads.
 
-## Events
-The **Events** tab lists upcoming events by month, with the date, time (or all day), location and details. Tap **+ Add** on that tab to add one; **Edit** on a card changes or deletes it. **⋯ → Export PDF** on the Events tab prints the event list. The first 13 events were imported from the "Grey Events" Google Calendar (supabase/008_events.sql).
+## Events (synced with Google Calendar)
+The **Events** tab shows the **Grey Events** Google Calendar live: events added or changed in Google Calendar appear in the app, and adding, editing or deleting in the app (admins only) changes Google Calendar.
+
+How: the app calls the Supabase Edge Function `supabase/functions/calendar`, which checks the signed-in user's role (`my_access`) and talks to Google with a service account.
+
+One-time setup:
+1. Google Cloud (Grey Athletes project): enable **Google Calendar API**; create a service account; add a **JSON key**.
+2. Google Calendar → Grey Events → **Settings and sharing → Share with specific people**: add the service account's email with **Make changes to events**.
+3. Supabase → Edge Functions → Secrets: `GOOGLE_SERVICE_ACCOUNT` = the whole JSON key file. (Optional: `GREY_CALENDAR_ID`, `ALLOWED_ORIGINS`.)
+4. Deploy the `calendar` function with JWT verification off (it checks the user itself).
+
+The old `events` table (supabase/008_events.sql) is no longer used by the app.
 
 ## Google sign-in and roles (supabase/009_google_login.sql)
 Staff sign in with Google; the PIN is retired. Roles live in `app_users` and are enforced in the database:

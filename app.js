@@ -106,12 +106,39 @@
       throw err;
     }
   }
+  // Events live in Google Calendar; the "calendar" Edge Function reads and writes them for us.
+  async function calendarApi(action, extra) {
+    const headers = { "Content-Type": "application/json", apikey: KEY };
+    const t = await accessToken();
+    if (t) headers.Authorization = "Bearer " + t;
+    let res;
+    try { res = await fetch(`${BASE}/functions/v1/calendar`, { method: "POST", headers, body: JSON.stringify({ action, ...extra }) }); }
+    catch { throw Object.assign(new Error("offline"), { code: "offline" }); }
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      const code = (body && body.error) || (res.status === 404 ? "not_deployed" : "google_error");
+      if (code === "not_logged_in") { signOut(false); throw Object.assign(new Error("locked"), { code: "locked" }); }
+      if (code === "no_access") { showNoAccess(); throw Object.assign(new Error("locked"), { code: "locked" }); }
+      throw Object.assign(new Error(code), { code });
+    }
+    return body;
+  }
+  const CAL_ERRORS = {
+    not_deployed: "The Google Calendar link isn't set up yet.",
+    not_configured: "The Google Calendar key hasn't been added yet.",
+    google_auth: "Google rejected the calendar key. It may need to be replaced.",
+    calendar_not_shared: "The Grey Events calendar isn't shared with the app's Google account yet.",
+    google_error: "Google Calendar didn't answer. Try again in a moment.",
+    offline: "No connection. Check your internet and try again.",
+  };
+
   function errorText(err) {
     const c = err && err.code;
     if (c === "offline") return "No connection. Check your internet and try again.";
     if (c === "not_found") return "That was already deleted by someone else.";
     if (c === "duplicate_name") return "That name is already in the list.";
     if (c === "not_allowed") return "Only admins can do that.";
+    if (CAL_ERRORS[c]) return CAL_ERRORS[c];
     if (c === "bad_email") return "That doesn't look like an email address.";
     if (c === "last_admin") return "There must always be at least one admin.";
     return "Couldn't save. Try again.";
@@ -119,7 +146,7 @@
 
   // ---------- State ----------
   let people = [], items = [], categories = [], comps = [];   // comps: [{id, name}]
-  let events = [], evLoaded = false;   // [{id, title, starts_on, ends_on, start_time, end_time, location, details}]
+  let events = [], evLoaded = false, evError = "";   // events come live from the "Grey Events" Google Calendar
   let tab = "athletes", showPast = false, evEditingId = null, evArmedDelete = false;
   const photos = new Map();                 // personId -> { ts, data } (data URL)
   let editingId = null, openId = null, armedDelete = null;
@@ -141,7 +168,7 @@
 
   function resetState() {
     clearInterval(timer); timer = null;
-    people = []; items = []; categories = []; comps = []; events = []; evLoaded = false; photos.clear(); openId = null;
+    people = []; items = []; categories = []; comps = []; events = []; evLoaded = false; evError = ""; photos.clear(); openId = null;
     role = null; myEmail = ""; document.body.dataset.role = "";
     closeEvSheet(); closeSheet(); closeManage(); closeTeam(); $("bulk").hidden = true;
     $("list").replaceChildren(); $("evList").replaceChildren();
@@ -204,7 +231,7 @@
   async function load() {
     const seq = ++loadSeq;
     try {
-      const [data, evs] = await Promise.all([isAdmin() ? call("list_all", {}) : Promise.resolve({}), call("list_events", {}).catch((e) => { if (e.code === "locked") throw e; return null; })]);
+      const [data, evs] = await Promise.all([isAdmin() ? call("list_all", {}) : Promise.resolve({}), calendarApi("list").then((r) => { evError = ""; return r && r.events; }).catch((e) => { if (e.code === "locked") throw e; evError = e.code; return null; })]);
       if (seq !== loadSeq) return;
       if (Array.isArray(evs)) { events = evs.map(cleanEvent).filter(Boolean); evLoaded = true; }
       people = (Array.isArray(data && data.people) ? data.people : []).map(cleanPerson);
@@ -949,7 +976,8 @@
     if (!e || !isDate(e.starts_on)) return null;
     return { id: String(e.id), title: str(e.title, 120) || "Untitled", starts_on: e.starts_on,
       ends_on: isDate(e.ends_on) ? e.ends_on : "", start_time: isTime(e.start_time) ? e.start_time : "",
-      end_time: isTime(e.end_time) ? e.end_time : "", location: str(e.location, 200), details: str(e.details, 4000) };
+      end_time: isTime(e.end_time) ? e.end_time : "", location: str(e.location, 500), details: str(e.details, 8000),
+      link: typeof e.link === "string" && /^https:\/\/(www\.)?google\.com\/calendar\//.test(e.link) ? e.link : "" };
   }
   const lastDay = (e) => e.ends_on || e.starts_on;
   const dayDiff = (a, b) => Math.round((Date.parse(a + "T00:00:00Z") - Date.parse(b + "T00:00:00Z")) / 864e5);
@@ -1025,10 +1053,11 @@
       const list = events.filter(evMatches);
       const up = list.filter((e) => lastDay(e) >= t), past = list.filter((e) => lastDay(e) < t).reverse();
       const next = up[0];
-      $("count").textContent = !evLoaded ? "" : `${up.length} upcoming ${up.length === 1 ? "event" : "events"}` + (next ? ` · next ${(when(next) || "on " + dateText(next).split(" · ")[0]).replace(/^In /, "in ").replace(/^Today$/, "today").replace(/^Tomorrow$/, "tomorrow").replace(/^On now$/, "on now")}` : "");
+      $("count").textContent = !evLoaded ? "" : `Synced with Google Calendar · ${up.length} upcoming ${up.length === 1 ? "event" : "events"}` + (next ? ` · next ${(when(next) || "on " + dateText(next).split(" · ")[0]).replace(/^In /, "in ").replace(/^Today$/, "today").replace(/^Tomorrow$/, "tomorrow").replace(/^On now$/, "on now")}` : "");
       const box = $("evList"); box.replaceChildren();
       if (!evLoaded) {
-        const e = el("div", "empty"); e.append(el("b", null, "Events aren't set up yet"), el("span", null, "The database needs its events update first."));
+        const e = el("div", "empty");
+        e.append(el("b", null, evError ? "Couldn't load events" : "Loading events…"), el("span", null, evError ? (CAL_ERRORS[evError] || CAL_ERRORS.google_error) : "From the Grey Events Google Calendar."));
         box.append(e);
       } else if (!up.length) {
         const e = el("div", "empty"); e.append(el("b", null, list.length < events.length ? "No matching events" : "No upcoming events"), el("span", null, isAdmin() ? "Tap + Add to add one." : "Check back later."));
@@ -1075,7 +1104,7 @@
   function syncAllDay() { $("eTimes").hidden = $("eAllDay").checked; }
   $("eAllDay").addEventListener("change", syncAllDay);
   function openEvSheet(e) {
-    if (!evLoaded) { toast("Events aren't set up in the database yet."); return; }
+    if (!evLoaded) { toast(CAL_ERRORS[evError] || "Events haven't loaded yet."); return; }
     evEditingId = e ? e.id : null; evArmedDelete = false;
     $("evTitle").textContent = e ? "Edit event" : "Add event";
     $("eTitle").value = e ? e.title : "";
@@ -1087,6 +1116,7 @@
     $("eLocation").value = e ? e.location : "";
     $("eDetails").value = e ? e.details : "";
     $("evDelete").hidden = !e; $("evDelete").textContent = "Delete event";
+    $("evOpenGoogle").hidden = !(e && e.link); if (e && e.link) $("evOpenGoogle").href = e.link;
     $("evMsg").textContent = "";
     syncAllDay();
     $("toast").hidden = true;
@@ -1113,15 +1143,15 @@
     if (!allDay && !data.start_time) { $("evMsg").textContent = "Pick a start time, or switch on All day."; $("eStartTime").focus(); return; }
     const b = $("evSave"); b.disabled = true;
     try {
-      await call("save_event", { p_id: evEditingId, p_data: data });
-      toast((evEditingId ? "Saved " : "Added ") + data.title);
+      await calendarApi("save", { id: evEditingId || undefined, event: data });
+      toast((evEditingId ? "Saved " : "Added ") + data.title + " in Google Calendar");
       closeEvSheet(); load();
     } catch (err) { if (err.code !== "locked") $("evMsg").textContent = errorText(err); }
     finally { b.disabled = false; }
   });
   $("evDelete").addEventListener("click", async () => {
     if (!evArmedDelete) { evArmedDelete = true; $("evDelete").textContent = "Tap again to delete"; return; }
-    try { await call("delete_event", { p_id: evEditingId }); toast("Deleted"); closeEvSheet(); load(); }
+    try { await calendarApi("delete", { id: evEditingId }); toast("Deleted from Google Calendar"); closeEvSheet(); load(); }
     catch (err) { if (err.code !== "locked") $("evMsg").textContent = errorText(err); }
   });
 

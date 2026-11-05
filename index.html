@@ -164,7 +164,11 @@
       <label class="field"><span class="lbl">Location</span><input id="eLocation" maxlength="200" list="locList" autocomplete="off" placeholder="e.g. Strongbox Functional Fitness"></label>
       <label class="field"><span class="lbl">Details</span><textarea id="eDetails" maxlength="4000" placeholder="Format, teams, timings, who's going…"></textarea></label>
       <div class="msg" id="evMsg" role="status"></div>
-      <button type="button" class="btn-sm danger" id="evDelete" hidden>Delete event</button>
+      <div class="ev-sheet-actions">
+        <a class="btn-sm" id="evOpenGoogle" target="_blank" rel="noopener noreferrer" hidden>Open in Google Calendar</a>
+        <button type="button" class="btn-sm danger" id="evDelete" hidden>Delete event</button>
+      </div>
+      <p class="muted small-note">Changes here update the Grey Events Google Calendar, and changes made there show up here.</p>
     </div>
   </form>
 </div>
